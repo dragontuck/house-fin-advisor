@@ -1,0 +1,67 @@
+version: '3.8'
+
+# NOTE: This project uses existing shared infrastructure
+# 
+# External Services (already running):
+#   - PostgreSQL: localhost:5434 (house_financial database)
+#   - Redis: localhost:6379
+#   - Keycloak: https://keycloak.keystone.internal:7443/ (realm: house-fin)
+#
+# Local Services (containerized):
+#   - API: http://localhost:6723 (Express server)
+#   - Web: http://localhost:6713 (React dev server with hot reload)
+#
+# To start services manually:
+#   docker-compose up api web
+#
+# To test that existing services are accessible:
+#   psql -h localhost -p 5434 -U hf_admin -d house_financial -c "SELECT 1"
+#   redis-cli -p 6379 ping
+#   curl -k https://keycloak.keystone.internal:7443/health/ready
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: house-fin-api
+    restart: no
+    ports:
+      - "6723:6723"
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=host.docker.internal
+      - DB_PORT=5434
+      - DB_NAME=house_financial
+      - DB_USER=hf_admin
+      - DB_PASSWORD=hf_admin
+      - REDIS_URL=redis://host.docker.internal:6379
+      - LOG_LEVEL=info
+    volumes:
+      - ./apps/api/src:/app/src
+      - ./packages:/app/packages
+    networks:
+      - default
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: house-fin-web
+    restart: no
+    ports:
+      - "6713:6713"
+    environment:
+      - NODE_ENV=development
+      - VITE_API_BASE_URL=http://localhost:6723/api
+    volumes:
+      - ./apps/web/src:/app/src
+      - ./apps/web/index.html:/app/index.html
+      - ./packages:/app/packages
+    networks:
+      - default
+
+networks:
+  default:
+    name: house-fin-network
+

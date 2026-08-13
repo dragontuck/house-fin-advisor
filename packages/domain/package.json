@@ -1,0 +1,10 @@
+{
+    "name": "@house-fin/domain",
+    "version": "0.1.0",
+    "description": "Domain services and interfaces",
+    "main": "index.ts",
+    "types": "index.ts",
+    "dependencies": {
+        "@house-fin/contracts": "^0.1.0"
+    }
+}

@@ -1,0 +1,26 @@
+{
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "roots": [
+        "<rootDir>"
+    ],
+    "testMatch": [
+        "**/__tests__/**/*.ts",
+        "**/?(*.)+(spec|test).ts"
+    ],
+    "testPathIgnorePatterns": [
+        "/e2e/",
+        "/node_modules/"
+    ],
+    "moduleNameMapper": {
+        "^@house-fin/(.*)$": "<rootDir>/packages/$1"
+    },
+    "collectCoverageFrom": [
+        "packages/**/*.ts",
+        "apps/**/*.ts",
+        "!**/*.test.ts",
+        "!**/*.spec.ts",
+        "!**/node_modules/**",
+        "!**/dist/**"
+    ]
+}

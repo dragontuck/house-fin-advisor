@@ -1,0 +1,21 @@
+{
+    "name": "house-fin-advisor",
+    "version": "0.1.0",
+    "description": "Privacy-first household financial advisor",
+    "private": true,
+    "workspaces": [
+        "packages/*",
+        "apps/*"
+    ],
+    "scripts": {
+        "test": "jest",
+        "lint": "eslint packages apps --ext .ts,.tsx",
+        "type-check": "tsc --noEmit"
+    },
+    "devDependencies": {
+        "@typescript-eslint/eslint-plugin": "^5.59.8",
+        "@typescript-eslint/parser": "^5.59.8",
+        "eslint": "^8.42.0",
+        "typescript": "^5.1.3"
+    }
+}

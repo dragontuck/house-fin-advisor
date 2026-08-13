@@ -1,0 +1,7 @@
+{
+    "name": "@house-fin/contracts",
+    "version": "0.1.0",
+    "description": "Type contracts shared across all layers",
+    "main": "index.ts",
+    "types": "index.ts"
+}
