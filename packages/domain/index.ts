@@ -8,11 +8,16 @@ import {
     Account,
     FinancialSnapshot,
     HouseholdSettings,
+    FinancialDocument,
     HouseholdMemberRole,
     HouseholdMemberVisibility,
     EntityId,
     CreateHouseholdRequest,
     CreateAccountRequest,
+    DocumentProcessingStatus,
+    PostedTransaction,
+    StatementPostingAudit,
+    AutoPostConfig,
 } from "@house-fin/contracts";
 
 /**
@@ -69,6 +74,48 @@ export interface HouseholdSettingsRepository {
     create(settings: Omit<HouseholdSettings, "id">): Promise<HouseholdSettings>;
     findByHouseholdId(householdId: EntityId): Promise<HouseholdSettings | null>;
     update(id: EntityId, settings: Partial<HouseholdSettings>): Promise<HouseholdSettings>;
+}
+
+/**
+ * FinancialDocumentRepository interface - for statement uploads
+ */
+export type CreateFinancialDocumentInput = Omit<FinancialDocument, "id" | "createdAt" | "updatedAt" | "accountId" | "institutionName" | "statementType" | "periodStart" | "periodEnd" | "openingBalanceCents" | "closingBalanceCents" | "processedAt" | "errorCode" | "errorMessageUser"> & {
+    accountId?: EntityId | null;
+    institutionName?: string | null;
+    statementType?: string | null;
+    periodStart?: Date | null;
+    periodEnd?: Date | null;
+    openingBalanceCents?: number | null;
+    closingBalanceCents?: number | null;
+    processedAt?: Date | null;
+    errorCode?: string | null;
+    errorMessageUser?: string | null;
+};
+
+export interface FinancialDocumentRepository {
+    create(document: CreateFinancialDocumentInput): Promise<FinancialDocument>;
+    findById(id: EntityId): Promise<FinancialDocument | null>;
+    findByHouseholdId(householdId: EntityId): Promise<FinancialDocument[]>;
+    findByChecksum(
+        householdId: EntityId,
+        checksum: string
+    ): Promise<FinancialDocument | null>; // Duplicate detection
+    update(id: EntityId, document: Partial<FinancialDocument>): Promise<FinancialDocument>;
+    updateStatus(
+        id: EntityId,
+        status: DocumentProcessingStatus,
+        errorCode?: string,
+        errorMessageUser?: string,
+        correlationId?: string,
+        reason?: string
+    ): Promise<FinancialDocument>;
+    softDelete(id: EntityId, reason?: string): Promise<void>; // Soft delete for audit trail
+    getProcessingHistory(documentId: EntityId): Promise<Array<{
+        previousStatus: DocumentProcessingStatus | null;
+        newStatus: DocumentProcessingStatus;
+        changedAt: Date;
+        reason: string | null;
+    }>>;
 }
 
 /**
@@ -170,3 +217,63 @@ export function createHouseholdService(
 
 // Export FinancialSnapshotCalculator for deterministic calculations
 export { FinancialSnapshotCalculator, CalculateSnapshotInput, createFinancialSnapshotCalculator } from "./snapshot-calculator";
+
+// Export Statement domain services
+export {
+    calculateFileChecksum,
+    generateObjectStorageKey,
+    validateDocumentUpload,
+    validateFileContent,
+    isValidStatusTransition,
+    createUserFacingError,
+    VALID_STATUS_TRANSITIONS,
+} from "./statements";
+
+// Export Statement Parsers
+export { CsvStatementParser } from "./csv-statement-parser";
+export { PdfStatementParser } from "./pdf-statement-parser";
+export { ImageStatementParser } from "./image-statement-parser";
+export {
+    StatementParserRegistry,
+    StatementParserConfig,
+    ParserSelection,
+    SecureParserInput,
+    createStatementParserRegistry,
+    parseStatement,
+} from "./statement-parser-registry";
+
+// Export Transaction Normalization
+export {
+    normalizeTransaction,
+    normalizeBatch,
+    createNormalizedTransaction,
+} from "./transaction-normalizer";
+
+// Export Transaction Reconciliation
+export {
+    ReconciliationContext,
+    ExistingTransaction,
+    reconcileTransaction,
+    reconcileBatch,
+    checkIdempotency,
+} from "./transaction-reconciler";
+
+// Export Review Queue
+export {
+    ReviewQueueService,
+    IReviewRepository,
+    CreateReviewItemInput,
+    ResolveReviewItemInput,
+} from "./review-queue";
+
+// Export Transaction Posting
+export {
+    TransactionPostingService,
+    IPostingRepository,
+    IFinancialDocumentRepository,
+    IReconciliationRepository,
+    IFinancialSnapshotCalculator,
+    IReviewQueueService,
+    PostingConfig,
+    PostingContext,
+} from "./posting-service";

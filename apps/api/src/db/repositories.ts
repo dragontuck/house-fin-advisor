@@ -2,23 +2,31 @@
  * PostgreSQL implementation of domain repositories
  */
 
-import { query } from "./connection";
+import { query, getClient } from "./connection";
 import {
     Household,
     HouseholdMember,
     Account,
     FinancialSnapshot,
     HouseholdSettings,
+    FinancialDocument,
     EntityId,
     Money,
     CreateHouseholdRequest,
     CreateAccountRequest,
+    DocumentProcessingStatus,
+    DocumentSourceType,
     HouseholdMemberRole,
     HouseholdMemberVisibility,
     AccountType,
     AccountOwnership,
     AccountStatus,
     FinancialHealthStatus,
+    ReviewItem,
+    ReviewType,
+    ReviewSeverity,
+    ReviewStatus,
+    ReviewResolution,
 } from "@house-fin/contracts";
 import {
     HouseholdRepository,
@@ -26,7 +34,16 @@ import {
     AccountRepository,
     FinancialSnapshotRepository,
     HouseholdSettingsRepository,
+    FinancialDocumentRepository,
+    CreateFinancialDocumentInput,
+    IReviewRepository,
+    IPostingRepository,
 } from "@house-fin/domain";
+import {
+    PostedTransaction,
+    StatementPostingAudit,
+    AutoPostConfig,
+} from "@house-fin/contracts";
 
 // Type for database row objects
 type DbRow = Record<string, unknown>;
@@ -446,6 +463,888 @@ export class PgHouseholdSettingsRepository implements HouseholdSettingsRepositor
             incomeSource: row.income_source as "manual_entry" | "bank_feed" | "user_provided",
             updatedAt: row.updated_at as Date,
             updatedBy: row.updated_by as EntityId,
+        };
+    }
+}
+
+/**
+ * PostgreSQL FinancialDocumentRepository
+ * Implements statement/document storage and lifecycle management
+ */
+export class PgFinancialDocumentRepository implements FinancialDocumentRepository {
+    async create(
+        document: CreateFinancialDocumentInput
+    ): Promise<FinancialDocument> {
+        // Convert Date objects to ISO date strings for DATE columns
+        const periodStart = document.periodStart instanceof Date
+            ? document.periodStart.toISOString().split("T")[0]
+            : document.periodStart;
+        const periodEnd = document.periodEnd instanceof Date
+            ? document.periodEnd.toISOString().split("T")[0]
+            : document.periodEnd;
+
+        const result = await query(
+            `INSERT INTO finhouse.financial_documents (
+                household_id, source_type, file_name, mime_type, file_size_bytes,
+                file_checksum, object_storage_key, account_id, institution_name,
+                statement_type, period_start, period_end, opening_balance_cents,
+                closing_balance_cents, processing_status, processing_version,
+                uploaded_by, uploaded_at, correlation_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+            RETURNING *`,
+            [
+                document.householdId,
+                document.sourceType,
+                document.fileName,
+                document.mimeType,
+                document.fileSizeBytes,
+                document.fileChecksum,
+                document.objectStorageKey,
+                document.accountId || null,
+                document.institutionName || null,
+                document.statementType || null,
+                periodStart || null,
+                periodEnd || null,
+                document.openingBalanceCents || null,
+                document.closingBalanceCents || null,
+                document.processingStatus,
+                document.processingVersion,
+                document.uploadedBy,
+                document.uploadedAt,
+                document.correlationId,
+            ]
+        );
+
+        return this.rowToDocument(result.rows[0]);
+    }
+
+    async findById(id: EntityId): Promise<FinancialDocument | null> {
+        const result = await query(
+            "SELECT * FROM finhouse.financial_documents WHERE id = $1 AND deleted_at IS NULL",
+            [id]
+        );
+        if (result.rows.length === 0) return null;
+        return this.rowToDocument(result.rows[0]);
+    }
+
+    async findByHouseholdId(householdId: EntityId): Promise<FinancialDocument[]> {
+        const result = await query(
+            "SELECT * FROM finhouse.financial_documents WHERE household_id = $1 AND deleted_at IS NULL ORDER BY uploaded_at DESC",
+            [householdId]
+        );
+        return result.rows.map((row) => this.rowToDocument(row));
+    }
+
+    async findByChecksum(
+        householdId: EntityId,
+        checksum: string
+    ): Promise<FinancialDocument | null> {
+        const result = await query(
+            "SELECT * FROM finhouse.financial_documents WHERE household_id = $1 AND file_checksum = $2 AND deleted_at IS NULL",
+            [householdId, checksum]
+        );
+        if (result.rows.length === 0) return null;
+        return this.rowToDocument(result.rows[0]);
+    }
+
+    async update(id: EntityId, document: Partial<FinancialDocument>): Promise<FinancialDocument> {
+        const updates = [];
+        const values = [];
+        let paramIndex = 1;
+
+        if (document.accountId !== undefined) {
+            updates.push(`account_id = $${paramIndex}`);
+            values.push(document.accountId || null);
+            paramIndex++;
+        }
+        if (document.institutionName !== undefined) {
+            updates.push(`institution_name = $${paramIndex}`);
+            values.push(document.institutionName || null);
+            paramIndex++;
+        }
+        if (document.statementType !== undefined) {
+            updates.push(`statement_type = $${paramIndex}`);
+            values.push(document.statementType || null);
+            paramIndex++;
+        }
+        if (document.periodStart !== undefined) {
+            updates.push(`period_start = $${paramIndex}`);
+            // Convert Date to ISO date string for DATE column
+            const periodStart = document.periodStart instanceof Date
+                ? document.periodStart.toISOString().split("T")[0]
+                : document.periodStart;
+            values.push(periodStart || null);
+            paramIndex++;
+        }
+        if (document.periodEnd !== undefined) {
+            updates.push(`period_end = $${paramIndex}`);
+            // Convert Date to ISO date string for DATE column
+            const periodEnd = document.periodEnd instanceof Date
+                ? document.periodEnd.toISOString().split("T")[0]
+                : document.periodEnd;
+            values.push(periodEnd || null);
+            paramIndex++;
+        }
+        if (document.openingBalanceCents !== undefined) {
+            updates.push(`opening_balance_cents = $${paramIndex}`);
+            values.push(document.openingBalanceCents || null);
+            paramIndex++;
+        }
+        if (document.closingBalanceCents !== undefined) {
+            updates.push(`closing_balance_cents = $${paramIndex}`);
+            values.push(document.closingBalanceCents || null);
+            paramIndex++;
+        }
+
+        updates.push(`updated_at = CURRENT_TIMESTAMP`);
+        values.push(id);
+
+        const result = await query(
+            `UPDATE finhouse.financial_documents SET ${updates.join(", ")} WHERE id = $${paramIndex} RETURNING *`,
+            values
+        );
+
+        return this.rowToDocument(result.rows[0]);
+    }
+
+    async updateStatus(
+        id: EntityId,
+        status: DocumentProcessingStatus,
+        errorCode?: string,
+        errorMessageUser?: string,
+        correlationId?: string,
+        reason?: string
+    ): Promise<FinancialDocument> {
+        // Get current status for audit trail
+        const currentResult = await query(
+            "SELECT processing_status FROM finhouse.financial_documents WHERE id = $1 AND deleted_at IS NULL",
+            [id]
+        );
+
+        if (currentResult.rows.length === 0) {
+            throw new Error(`Document not found: ${id}`);
+        }
+
+        const previousStatus = currentResult.rows[0].processing_status as DocumentProcessingStatus;
+
+        // Update document status
+        const terminalStatuses = ['COMPLETED', 'PARTIALLY_COMPLETED', 'FAILED'];
+        const result = await query(
+            `UPDATE finhouse.financial_documents
+             SET processing_status = $1::finhouse.document_processing_status, error_code = $2, error_message_user = $3,
+                 processed_at = CASE WHEN $1 = ANY($4) THEN CURRENT_TIMESTAMP ELSE processed_at END,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = $5 AND deleted_at IS NULL
+             RETURNING *`,
+            [status, errorCode || null, errorMessageUser || null, terminalStatuses, id]
+        );
+
+        if (result.rows.length === 0) {
+            throw new Error(`Document not found or deleted: ${id}`);
+        }
+
+        // Log to history table (audit trail)
+        if (previousStatus !== status) {
+            await query(
+                `INSERT INTO finhouse.document_processing_history
+                 (document_id, previous_status, new_status, changed_by, reason, correlation_id)
+                 VALUES ($1, $2::finhouse.document_processing_status, $3::finhouse.document_processing_status, $4, $5, $6)`,
+                [id, previousStatus, status, 'system', reason || null, correlationId || null]
+            );
+        }
+
+        return this.rowToDocument(result.rows[0]);
+    }
+
+    async softDelete(id: EntityId, reason?: string): Promise<void> {
+        const result = await query(
+            "UPDATE finhouse.financial_documents SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND deleted_at IS NULL RETURNING id",
+            [id]
+        );
+
+        if (result.rows.length === 0) {
+            throw new Error(`Document not found or already deleted: ${id}`);
+        }
+
+        // Log deletion to history
+        if (reason) {
+            await query(
+                `INSERT INTO finhouse.document_processing_history
+                 (document_id, new_status, changed_by, reason)
+                 VALUES ($1, $2::finhouse.document_processing_status, $3, $4)`,
+                [id, 'FAILED', 'system', reason]
+            );
+        }
+    }
+
+    async getProcessingHistory(documentId: EntityId): Promise<Array<{
+        previousStatus: DocumentProcessingStatus | null;
+        newStatus: DocumentProcessingStatus;
+        changedAt: Date;
+        reason: string | null;
+    }>> {
+        const result = await query(
+            `SELECT previous_status, new_status, changed_at, reason
+             FROM finhouse.document_processing_history
+             WHERE document_id = $1
+             ORDER BY changed_at ASC`,
+            [documentId]
+        );
+
+        return result.rows.map((row: any) => ({
+            previousStatus: row.previous_status as DocumentProcessingStatus | null,
+            newStatus: row.new_status as DocumentProcessingStatus,
+            changedAt: new Date(row.changed_at),
+            reason: row.reason as string | null
+        }));
+    }
+
+    private rowToDocument(row: DbRow): FinancialDocument {
+        // Helper to convert DATE strings to Date objects correctly
+        const parseDate = (dateValue: any): Date | null => {
+            if (!dateValue) return null;
+            // If already a Date, return it
+            if (dateValue instanceof Date) return dateValue;
+            // Convert string to Date
+            const dateStr = String(dateValue);
+            // DATE columns come as YYYY-MM-DD strings, create a date in UTC
+            const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (match) {
+                return new Date(`${match[0]}T00:00:00Z`);
+            }
+            return new Date(dateStr);
+        };
+
+        return {
+            id: row.id as EntityId,
+            householdId: row.household_id as EntityId,
+            sourceType: row.source_type as DocumentSourceType,
+            fileName: row.file_name as string,
+            mimeType: row.mime_type as string,
+            fileSizeBytes: row.file_size_bytes as number,
+            fileChecksum: row.file_checksum as string,
+            objectStorageKey: row.object_storage_key as string,
+            accountId: row.account_id as EntityId | null,
+            institutionName: row.institution_name as string | null,
+            statementType: row.statement_type as string | null,
+            periodStart: parseDate(row.period_start),
+            periodEnd: parseDate(row.period_end),
+            openingBalanceCents: row.opening_balance_cents as number | null,
+            closingBalanceCents: row.closing_balance_cents as number | null,
+            processingStatus: row.processing_status as DocumentProcessingStatus,
+            processingVersion: row.processing_version as number,
+            uploadedBy: row.uploaded_by as string,
+            uploadedAt: new Date(row.uploaded_at as string),
+            processedAt: row.processed_at ? new Date(row.processed_at as string) : null,
+            errorCode: row.error_code as string | null,
+            errorMessageUser: row.error_message_user as string | null,
+            correlationId: row.correlation_id as EntityId,
+            createdAt: new Date(row.created_at as string),
+            updatedAt: new Date(row.updated_at as string),
+        };
+    }
+}
+
+/**
+ * PostgreSQL Review Item Repository
+ */
+export class PgReviewItemRepository implements IReviewRepository {
+    async createReviewItem(item: ReviewItem): Promise<ReviewItem> {
+        const result = await query(
+            `INSERT INTO finhouse.review_items (
+                id, household_id, statement_id, type, severity, status, title, user_message,
+                recommended_action, candidate_values, supporting_evidence, transaction_ids, created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            RETURNING id, household_id, statement_id, type, severity, status, title, user_message,
+                recommended_action, candidate_values, supporting_evidence, transaction_ids,
+                created_at, updated_at, resolved_at, resolved_by`,
+            [
+                item.id,
+                item.householdId,
+                item.statementId || null,
+                item.type,
+                item.severity,
+                item.status,
+                item.title,
+                item.userMessage,
+                item.recommendedAction || null,
+                JSON.stringify(item.candidateValues),
+                JSON.stringify(item.supportingEvidence),
+                item.transactionIds || [],
+                item.createdAt,
+                item.updatedAt,
+            ]
+        );
+        return this.mapRowToReviewItem(result.rows[0]);
+    }
+
+    async getReviewItem(id: EntityId): Promise<ReviewItem | null> {
+        const result = await query(
+            `SELECT id, household_id, statement_id, type, severity, status, title, user_message,
+                recommended_action, candidate_values, supporting_evidence, transaction_ids,
+                created_at, updated_at, resolved_at, resolved_by
+            FROM finhouse.review_items WHERE id = $1`,
+            [id]
+        );
+        if (result.rows.length === 0) return null;
+        return this.mapRowToReviewItem(result.rows[0]);
+    }
+
+    async updateReviewItem(item: ReviewItem): Promise<ReviewItem> {
+        const result = await query(
+            `UPDATE finhouse.review_items SET status = $2, updated_at = $3, resolved_at = $4, resolved_by = $5
+            WHERE id = $1
+            RETURNING id, household_id, statement_id, type, severity, status, title, user_message,
+                recommended_action, candidate_values, supporting_evidence, transaction_ids,
+                created_at, updated_at, resolved_at, resolved_by`,
+            [item.id, item.status, item.updatedAt, item.resolvedAt || null, item.resolvedBy || null]
+        );
+        return this.mapRowToReviewItem(result.rows[0]);
+    }
+
+    async listReviewItems(
+        householdId: EntityId,
+        filters?: { status?: ReviewStatus; type?: ReviewType; severity?: ReviewSeverity }
+    ): Promise<ReviewItem[]> {
+        let sql = `SELECT id, household_id, statement_id, type, severity, status, title, user_message,
+                recommended_action, candidate_values, supporting_evidence, transaction_ids,
+                created_at, updated_at, resolved_at, resolved_by
+            FROM finhouse.review_items WHERE household_id = $1`;
+        const params: any[] = [householdId];
+
+        if (filters?.status) {
+            params.push(filters.status);
+            sql += ` AND status = $${params.length}`;
+        }
+        if (filters?.type) {
+            params.push(filters.type);
+            sql += ` AND type = $${params.length}`;
+        }
+        if (filters?.severity) {
+            params.push(filters.severity);
+            sql += ` AND severity = $${params.length}`;
+        }
+        sql += ` ORDER BY created_at DESC`;
+
+        const result = await query(sql, params);
+        return result.rows.map((row) => this.mapRowToReviewItem(row));
+    }
+
+    async createResolution(resolution: ReviewResolution): Promise<ReviewResolution> {
+        const result = await query(
+            `INSERT INTO finhouse.review_resolutions (
+                id, review_item_id, household_id, chosen_action, reasoning, affected_transaction_ids, resulting_metadata, resolved_by, resolved_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING id, review_item_id, household_id, chosen_action, reasoning, affected_transaction_ids, resulting_metadata, resolved_by, resolved_at`,
+            [
+                require("crypto").randomUUID(),
+                resolution.reviewItemId,
+                null, // Will be fetched from review item
+                resolution.chosenAction,
+                resolution.reasoning,
+                resolution.affectedTransactionIds || [],
+                resolution.resultingMetadata ? JSON.stringify(resolution.resultingMetadata) : null,
+                resolution.resolvedBy,
+                resolution.resolvedAt,
+            ]
+        );
+        return this.mapRowToResolution(result.rows[0]);
+    }
+
+    async getResolution(reviewItemId: EntityId): Promise<ReviewResolution | null> {
+        const result = await query(
+            `SELECT id, review_item_id, household_id, chosen_action, reasoning, affected_transaction_ids, resulting_metadata, resolved_by, resolved_at
+            FROM finhouse.review_resolutions WHERE review_item_id = $1 ORDER BY resolved_at DESC LIMIT 1`,
+            [reviewItemId]
+        );
+        if (result.rows.length === 0) return null;
+        return this.mapRowToResolution(result.rows[0]);
+    }
+
+    private mapRowToReviewItem(row: DbRow): ReviewItem {
+        return {
+            id: row.id as EntityId,
+            householdId: row.household_id as EntityId,
+            statementId: row.statement_id ? (row.statement_id as EntityId) : undefined,
+            type: row.type as ReviewType,
+            severity: row.severity as ReviewSeverity,
+            status: row.status as ReviewStatus,
+            title: row.title as string,
+            userMessage: row.user_message as string,
+            recommendedAction: (row.recommended_action as string | null) || undefined,
+            candidateValues: JSON.parse(row.candidate_values as string),
+            supportingEvidence: JSON.parse(row.supporting_evidence as string),
+            transactionIds: (row.transaction_ids as EntityId[]) || [],
+            createdAt: new Date(row.created_at as string),
+            updatedAt: new Date(row.updated_at as string),
+            resolvedAt: row.resolved_at ? new Date(row.resolved_at as string) : undefined,
+            resolvedBy: (row.resolved_by as string | null) || undefined,
+        };
+    }
+
+    private mapRowToResolution(row: DbRow): ReviewResolution {
+        return {
+            reviewItemId: row.review_item_id as EntityId,
+            chosenAction: row.chosen_action as string,
+            reasoning: row.reasoning as string,
+            resolvedBy: row.resolved_by as string,
+            resolvedAt: new Date(row.resolved_at as string),
+            affectedTransactionIds: (row.affected_transaction_ids as EntityId[]) || [],
+            resultingMetadata: row.resulting_metadata ? JSON.parse(row.resulting_metadata as string) : undefined,
+        };
+    }
+}
+
+/**
+ * PostgreSQL PostingRepository
+ * Handles persistent storage of posted transactions, audit records, and configuration
+ */
+export class PgPostingRepository implements IPostingRepository {
+    /**
+     * Get auto-post configuration for a household
+     */
+    async getAutoPostConfig(householdId: EntityId): Promise<AutoPostConfig | null> {
+        const result = await query(
+            `SELECT id, household_id, confidence_threshold, allow_partial_posting, updated_at, updated_by, created_at
+             FROM finhouse.auto_post_config WHERE household_id = $1`,
+            [householdId]
+        );
+        if (result.rows.length === 0) return null;
+        const row = result.rows[0];
+        return this.mapRowToAutoPostConfig(row);
+    }
+
+    /**
+     * Create or update auto-post configuration for a household
+     */
+    async createOrUpdateAutoPostConfig(
+        config: Omit<AutoPostConfig, "id" | "createdAt">
+    ): Promise<AutoPostConfig> {
+        const result = await query(
+            `INSERT INTO finhouse.auto_post_config 
+             (household_id, confidence_threshold, allow_partial_posting, updated_by)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (household_id) DO UPDATE SET
+                confidence_threshold = EXCLUDED.confidence_threshold,
+                allow_partial_posting = EXCLUDED.allow_partial_posting,
+                updated_by = EXCLUDED.updated_by,
+                updated_at = CURRENT_TIMESTAMP
+             RETURNING id, household_id, confidence_threshold, allow_partial_posting, updated_at, updated_by, created_at`,
+            [
+                config.householdId,
+                config.confidenceThreshold,
+                config.allowPartialPosting,
+                config.updatedBy,
+            ]
+        );
+        const row = result.rows[0];
+        return this.mapRowToAutoPostConfig(row);
+    }
+
+    /**
+     * Create a posted transaction in canonical ledger
+     */
+    async createPostedTransaction(
+        tx: Omit<PostedTransaction, "id" | "createdAt">
+    ): Promise<PostedTransaction> {
+        const result = await query(
+            `INSERT INTO finhouse.posted_transactions
+             (household_id, account_id, posted_date, transaction_date, amount_cents, direction,
+              merchant, description, confidence_score, source_document_id, source_row_number,
+              source_page_number, reconciliation_state, matched_transaction_id, statement_reference,
+              source_transaction_id, original_amount_string, original_date_string,
+              posted_by, posting_correlation_id, calculation_version, metadata)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+             RETURNING id, household_id, account_id, posted_date, transaction_date, amount_cents,
+              direction, merchant, description, confidence_score, source_document_id, source_row_number,
+              source_page_number, reconciliation_state, matched_transaction_id, statement_reference,
+              source_transaction_id, original_amount_string, original_date_string,
+              posted_by, posted_at, posting_correlation_id, calculation_version, metadata, created_at`,
+            [
+                tx.householdId,
+                tx.accountId,
+                tx.postedDate,
+                tx.transactionDate,
+                tx.amountCents,
+                tx.direction,
+                tx.merchant,
+                tx.description,
+                tx.confidenceScore,
+                tx.sourceDocumentId,
+                tx.sourceRowNumber || null,
+                tx.sourcePageNumber || null,
+                tx.reconciliationState,
+                tx.matchedTransactionId || null,
+                tx.statementReference || null,
+                tx.sourceTransactionId || null,
+                tx.originalAmountString || null,
+                tx.originalDateString || null,
+                tx.postedBy,
+                tx.postingCorrelationId,
+                tx.calculationVersion,
+                JSON.stringify(tx.metadata || {}),
+            ]
+        );
+        const row = result.rows[0];
+        return this.mapRowToPostedTransaction(row);
+    }
+
+    /**
+     * Create multiple posted transactions (batch operation)
+     */
+    async createPostedTransactions(
+        txs: Omit<PostedTransaction, "id" | "createdAt">[]
+    ): Promise<PostedTransaction[]> {
+        if (txs.length === 0) {
+            return [];
+        }
+
+        const client = await getClient();
+        try {
+            // Start transaction
+            await client.query("BEGIN TRANSACTION");
+
+            const results: PostedTransaction[] = [];
+            for (const tx of txs) {
+                // Use client instead of pool for all queries in transaction
+                const result = await client.query(
+                    `INSERT INTO finhouse.posted_transactions
+                     (household_id, account_id, posted_date, transaction_date, amount_cents, direction,
+                      merchant, description, confidence_score, source_document_id, source_row_number,
+                      source_page_number, reconciliation_state, matched_transaction_id, statement_reference,
+                      source_transaction_id, original_amount_string, original_date_string,
+                      posted_by, posting_correlation_id, calculation_version, metadata)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+                     RETURNING id, household_id, account_id, posted_date, transaction_date, amount_cents,
+                               direction, merchant, description, confidence_score, source_document_id,
+                               source_row_number, source_page_number, reconciliation_state,
+                               matched_transaction_id, statement_reference, source_transaction_id,
+                               original_amount_string, original_date_string, posted_by, posted_at,
+                               posting_correlation_id, calculation_version, metadata, created_at`,
+                    [
+                        tx.householdId,
+                        tx.accountId,
+                        tx.postedDate,
+                        tx.transactionDate,
+                        tx.amountCents,
+                        tx.direction,
+                        tx.merchant,
+                        tx.description,
+                        tx.confidenceScore,
+                        tx.sourceDocumentId,
+                        tx.sourceRowNumber || null,
+                        tx.sourcePageNumber || null,
+                        tx.reconciliationState,
+                        tx.matchedTransactionId || null,
+                        tx.statementReference || null,
+                        tx.sourceTransactionId || null,
+                        tx.originalAmountString || null,
+                        tx.originalDateString || null,
+                        tx.postedBy,
+                        tx.postingCorrelationId,
+                        tx.calculationVersion,
+                        JSON.stringify(tx.metadata || {}),
+                    ]
+                );
+
+                if (result.rows.length > 0) {
+                    results.push(this.mapRowToPostedTransaction(result.rows[0]));
+                }
+            }
+
+            // Commit transaction
+            await client.query("COMMIT");
+            return results;
+        } catch (error) {
+            // Rollback on any error
+            try {
+                await client.query("ROLLBACK");
+            } catch (rollbackError) {
+                console.error("Rollback failed:", rollbackError);
+            }
+            throw error;
+        } finally {
+            client.release();
+        }
+    }
+
+    /**
+     * Get a single posted transaction by ID
+     */
+    async getPostedTransaction(id: EntityId): Promise<PostedTransaction | null> {
+        const result = await query(
+            `SELECT id, household_id, account_id, posted_date, transaction_date, amount_cents,
+              direction, merchant, description, confidence_score, source_document_id, source_row_number,
+              source_page_number, reconciliation_state, matched_transaction_id, statement_reference,
+              source_transaction_id, original_amount_string, original_date_string,
+              posted_by, posted_at, posting_correlation_id, calculation_version, metadata, created_at
+             FROM finhouse.posted_transactions WHERE id = $1`,
+            [id]
+        );
+        if (result.rows.length === 0) return null;
+        return this.mapRowToPostedTransaction(result.rows[0]);
+    }
+
+    /**
+     * List posted transactions with optional filtering
+     */
+    async listPostedTransactions(
+        householdId: EntityId,
+        filters?: {
+            accountId?: EntityId;
+            fromDate?: Date;
+            toDate?: Date;
+            postingCorrelationId?: EntityId;
+            sourceDocumentId?: EntityId;
+        }
+    ): Promise<PostedTransaction[]> {
+        let sql = `SELECT id, household_id, account_id, posted_date, transaction_date, amount_cents,
+                   direction, merchant, description, confidence_score, source_document_id, source_row_number,
+                   source_page_number, reconciliation_state, matched_transaction_id, statement_reference,
+                   source_transaction_id, original_amount_string, original_date_string,
+                   posted_by, posted_at, posting_correlation_id, calculation_version, metadata, created_at
+                   FROM finhouse.posted_transactions WHERE household_id = $1`;
+        const params: unknown[] = [householdId];
+        let paramIndex = 2;
+
+        if (filters?.accountId) {
+            sql += ` AND account_id = $${paramIndex}`;
+            params.push(filters.accountId);
+            paramIndex++;
+        }
+        if (filters?.fromDate) {
+            sql += ` AND posted_date >= $${paramIndex}`;
+            params.push(filters.fromDate);
+            paramIndex++;
+        }
+        if (filters?.toDate) {
+            sql += ` AND posted_date <= $${paramIndex}`;
+            params.push(filters.toDate);
+            paramIndex++;
+        }
+        if (filters?.postingCorrelationId) {
+            sql += ` AND posting_correlation_id = $${paramIndex}`;
+            params.push(filters.postingCorrelationId);
+            paramIndex++;
+        }
+        if (filters?.sourceDocumentId) {
+            sql += ` AND source_document_id = $${paramIndex}`;
+            params.push(filters.sourceDocumentId);
+            paramIndex++;
+        }
+
+        sql += ` ORDER BY posted_date DESC`;
+
+        const result = await query(sql, params);
+        return result.rows.map(row => this.mapRowToPostedTransaction(row));
+    }
+
+    /**
+     * Create a posting audit record
+     */
+    async createPostingAudit(
+        audit: Omit<StatementPostingAudit, "id">
+    ): Promise<StatementPostingAudit> {
+        const result = await query(
+            `INSERT INTO finhouse.statement_posting_audit
+             (household_id, source_document_id, posting_correlation_id, posting_status,
+              high_confidence_count, high_confidence_posted, low_confidence_count,
+              low_confidence_skipped, total_candidates, total_posted, error_code,
+              error_message_user, error_details, initiated_by, processing_duration_ms,
+              idempotency_key, started_at, completed_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+             RETURNING id, household_id, source_document_id, posting_correlation_id, posting_status,
+              high_confidence_count, high_confidence_posted, low_confidence_count,
+              low_confidence_skipped, total_candidates, total_posted, error_code,
+              error_message_user, error_details, initiated_by, processing_duration_ms,
+              idempotency_key, started_at, completed_at`,
+            [
+                audit.householdId,
+                audit.sourceDocumentId,
+                audit.postingCorrelationId,
+                audit.postingStatus,
+                audit.highConfidenceCount,
+                audit.highConfidencePosted,
+                audit.lowConfidenceCount,
+                audit.lowConfidenceSkipped,
+                audit.totalCandidates,
+                audit.totalPosted,
+                audit.errorCode || null,
+                audit.errorMessageUser || null,
+                audit.errorDetails ? JSON.stringify(audit.errorDetails) : null,
+                audit.initiatedBy,
+                audit.processingDurationMs || null,
+                audit.idempotencyKey,
+                audit.startedAt,
+                audit.completedAt || null,
+            ]
+        );
+        const row = result.rows[0];
+        return this.mapRowToPostingAudit(row);
+    }
+
+    /**
+     * Update a posting audit record
+     */
+    async updatePostingAudit(
+        id: EntityId,
+        updates: Partial<StatementPostingAudit>
+    ): Promise<StatementPostingAudit> {
+        const updateFields: string[] = [];
+        const params: unknown[] = [];
+        let paramIndex = 1;
+
+        if (updates.postingStatus !== undefined) {
+            updateFields.push(`posting_status = $${paramIndex}`);
+            params.push(updates.postingStatus);
+            paramIndex++;
+        }
+        if (updates.highConfidencePosted !== undefined) {
+            updateFields.push(`high_confidence_posted = $${paramIndex}`);
+            params.push(updates.highConfidencePosted);
+            paramIndex++;
+        }
+        if (updates.lowConfidenceSkipped !== undefined) {
+            updateFields.push(`low_confidence_skipped = $${paramIndex}`);
+            params.push(updates.lowConfidenceSkipped);
+            paramIndex++;
+        }
+        if (updates.totalPosted !== undefined) {
+            updateFields.push(`total_posted = $${paramIndex}`);
+            params.push(updates.totalPosted);
+            paramIndex++;
+        }
+        if (updates.errorCode !== undefined) {
+            updateFields.push(`error_code = $${paramIndex}`);
+            params.push(updates.errorCode || null);
+            paramIndex++;
+        }
+        if (updates.completedAt !== undefined) {
+            updateFields.push(`completed_at = $${paramIndex}`);
+            params.push(updates.completedAt);
+            paramIndex++;
+        }
+
+        params.push(id);
+        const result = await query(
+            `UPDATE finhouse.statement_posting_audit SET ${updateFields.join(", ")} WHERE id = $${paramIndex}
+             RETURNING id, household_id, source_document_id, posting_correlation_id, posting_status,
+              high_confidence_count, high_confidence_posted, low_confidence_count,
+              low_confidence_skipped, total_candidates, total_posted, error_code,
+              error_message_user, error_details, initiated_by, processing_duration_ms,
+              idempotency_key, started_at, completed_at`,
+            params
+        );
+        const row = result.rows[0];
+        return this.mapRowToPostingAudit(row);
+    }
+
+    /**
+     * Get posting audit by correlation ID
+     */
+    async getPostingAudit(correlationId: EntityId): Promise<StatementPostingAudit | null> {
+        const result = await query(
+            `SELECT id, household_id, source_document_id, posting_correlation_id, posting_status,
+              high_confidence_count, high_confidence_posted, low_confidence_count,
+              low_confidence_skipped, total_candidates, total_posted, error_code,
+              error_message_user, error_details, initiated_by, processing_duration_ms,
+              idempotency_key, started_at, completed_at
+             FROM finhouse.statement_posting_audit WHERE posting_correlation_id = $1`,
+            [correlationId]
+        );
+        if (result.rows.length === 0) return null;
+        return this.mapRowToPostingAudit(result.rows[0]);
+    }
+
+    /**
+     * Get posting audit by idempotency key
+     */
+    async getPostingAuditByIdempotencyKey(key: string): Promise<StatementPostingAudit | null> {
+        const result = await query(
+            `SELECT id, household_id, source_document_id, posting_correlation_id, posting_status,
+              high_confidence_count, high_confidence_posted, low_confidence_count,
+              low_confidence_skipped, total_candidates, total_posted, error_code,
+              error_message_user, error_details, initiated_by, processing_duration_ms,
+              idempotency_key, started_at, completed_at
+             FROM finhouse.statement_posting_audit WHERE idempotency_key = $1`,
+            [key]
+        );
+        if (result.rows.length === 0) return null;
+        return this.mapRowToPostingAudit(result.rows[0]);
+    }
+
+    /**
+     * Map database row to AutoPostConfig
+     */
+    private mapRowToAutoPostConfig(row: DbRow): AutoPostConfig {
+        return {
+            id: row.id as EntityId,
+            householdId: row.household_id as EntityId,
+            confidenceThreshold: Number(row.confidence_threshold),
+            allowPartialPosting: row.allow_partial_posting as boolean,
+            updatedAt: new Date(row.updated_at as string),
+            updatedBy: row.updated_by as string,
+            createdAt: new Date(row.created_at as string),
+        };
+    }
+
+    /**
+     * Map database row to PostedTransaction
+     */
+    private mapRowToPostedTransaction(row: DbRow): PostedTransaction {
+        return {
+            id: row.id as EntityId,
+            householdId: row.household_id as EntityId,
+            accountId: row.account_id as EntityId,
+            postedDate: new Date(row.posted_date as string),
+            transactionDate: new Date(row.transaction_date as string),
+            amountCents: row.amount_cents as number,
+            direction: row.direction as "DEBIT" | "CREDIT",
+            merchant: row.merchant as string,
+            description: row.description as string,
+            confidenceScore: Number(row.confidence_score),
+            sourceDocumentId: row.source_document_id as EntityId,
+            sourceRowNumber: row.source_row_number ? Number(row.source_row_number) : undefined,
+            sourcePageNumber: row.source_page_number ? Number(row.source_page_number) : undefined,
+            reconciliationState: row.reconciliation_state as any,
+            matchedTransactionId: row.matched_transaction_id ? (row.matched_transaction_id as EntityId) : undefined,
+            statementReference: (row.statement_reference as string | null) || undefined,
+            sourceTransactionId: (row.source_transaction_id as string | null) || undefined,
+            originalAmountString: (row.original_amount_string as string | null) || undefined,
+            originalDateString: (row.original_date_string as string | null) || undefined,
+            postedBy: row.posted_by as string,
+            postedAt: new Date(row.posted_at as string),
+            postingCorrelationId: row.posting_correlation_id as EntityId,
+            calculationVersion: row.calculation_version as number,
+            metadata: row.metadata ? JSON.parse(row.metadata as string) : {},
+            createdAt: new Date(row.created_at as string),
+        };
+    }
+
+    /**
+     * Map database row to StatementPostingAudit
+     */
+    private mapRowToPostingAudit(row: DbRow): StatementPostingAudit {
+        return {
+            id: row.id as EntityId,
+            householdId: row.household_id as EntityId,
+            sourceDocumentId: row.source_document_id as EntityId,
+            postingCorrelationId: row.posting_correlation_id as EntityId,
+            postingStatus: row.posting_status as any,
+            highConfidenceCount: row.high_confidence_count as number,
+            highConfidencePosted: row.high_confidence_posted as number,
+            lowConfidenceCount: row.low_confidence_count as number,
+            lowConfidenceSkipped: row.low_confidence_skipped as number,
+            totalCandidates: row.total_candidates as number,
+            totalPosted: row.total_posted as number,
+            errorCode: (row.error_code as string | null) || undefined,
+            errorMessageUser: (row.error_message_user as string | null) || undefined,
+            errorDetails: row.error_details ? JSON.parse(row.error_details as string) : undefined,
+            initiatedBy: row.initiated_by as string,
+            processingDurationMs: row.processing_duration_ms ? Number(row.processing_duration_ms) : undefined,
+            idempotencyKey: row.idempotency_key as string,
+            startedAt: new Date(row.started_at as string),
+            completedAt: row.completed_at ? new Date(row.completed_at as string) : undefined,
         };
     }
 }

@@ -1,0 +1,295 @@
+.review-detail {
+    display: flex;
+    flex-direction: column;
+    max-width: 800px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.review-detail.loading {
+    padding: 40px;
+    text-align: center;
+    color: #666;
+}
+
+.review-detail.error {
+    padding: 40px;
+    background-color: #fee;
+    color: #c00;
+    border-radius: 8px;
+}
+
+.detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px;
+    border-bottom: 1px solid #eee;
+}
+
+.detail-header h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 600;
+    color: #333;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #999;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease;
+}
+
+.close-btn:hover {
+    color: #333;
+}
+
+.detail-content {
+    padding: 24px;
+    flex: 1;
+    overflow-y: auto;
+    max-height: 60vh;
+}
+
+.message-section {
+    margin-bottom: 32px;
+    padding: 16px;
+    background: #f8f9fa;
+    border-radius: 6px;
+}
+
+.user-message {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.6;
+    color: #333;
+}
+
+.evidence-section {
+    margin-bottom: 32px;
+}
+
+.evidence-section h3 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+}
+
+.evidence-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.evidence-item {
+    background: #f0f7ff;
+    border-left: 3px solid #2196f3;
+    padding: 12px;
+    border-radius: 4px;
+}
+
+.evidence-type {
+    font-size: 12px;
+    font-weight: 600;
+    color: #1976d2;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.evidence-description {
+    font-size: 14px;
+    color: #333;
+    margin-bottom: 8px;
+}
+
+.evidence-data {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    padding: 8px;
+    overflow-x: auto;
+}
+
+.evidence-data pre {
+    margin: 0;
+    font-size: 12px;
+    color: #666;
+    font-family: "Monaco", "Courier New", monospace;
+}
+
+.no-evidence {
+    color: #999;
+    font-style: italic;
+    margin: 0;
+}
+
+.choices-section {
+    margin-bottom: 32px;
+}
+
+.choices-section h3 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+}
+
+.choices-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.choice-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px;
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.choice-label:hover {
+    background: #f0f7ff;
+    border-color: #2196f3;
+}
+
+.choice-label input[type="radio"] {
+    margin-top: 2px;
+    cursor: pointer;
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+}
+
+.choice-label input[type="radio"]:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.choice-text {
+    flex: 1;
+}
+
+.choice-text strong {
+    display: block;
+    font-size: 15px;
+    color: #333;
+    margin-bottom: 4px;
+}
+
+.choice-text p {
+    margin: 0;
+    font-size: 13px;
+    color: #666;
+}
+
+.reasoning-section {
+    margin-bottom: 32px;
+}
+
+.reasoning-section label {
+    display: block;
+    margin-bottom: 8px;
+}
+
+.reasoning-section strong {
+    font-size: 16px;
+    color: #333;
+}
+
+.reasoning-section p {
+    margin: 4px 0 0 0;
+    font-size: 13px;
+    color: #666;
+}
+
+.reasoning-section textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+.reasoning-section textarea:focus {
+    outline: none;
+    border-color: #2196f3;
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+}
+
+.reasoning-section textarea:disabled {
+    background: #f5f5f5;
+    color: #999;
+    cursor: not-allowed;
+}
+
+.detail-footer {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    padding: 24px;
+    border-top: 1px solid #eee;
+    background: #f9f9f9;
+}
+
+.btn {
+    padding: 10px 24px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background: #2196f3;
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: #1976d2;
+}
+
+.btn-primary:active:not(:disabled) {
+    background: #1565c0;
+}
+
+.btn-secondary {
+    background: white;
+    color: #333;
+    border: 1px solid #ddd;
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: #f5f5f5;
+    border-color: #999;
+}
+
+.btn-secondary:active:not(:disabled) {
+    background: #eeeeee;
+}

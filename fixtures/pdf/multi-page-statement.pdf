@@ -1,0 +1,85 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 4 0 R 5 0 R] /Count 3 >>
+endobj
+
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 6 0 R /Resources << /Font << /F1 7 0 R >> >> >>
+endobj
+
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 8 0 R /Resources << /Font << /F1 7 0 R >> >> >>
+endobj
+
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 9 0 R /Resources << /Font << /F1 7 0 R >> >> >>
+endobj
+
+6 0 obj
+<< >>
+stream
+BT
+/F1 14 Tf
+50 750 Td
+(Wells Fargo Quarterly Statement) Tj
+0 -20 Td
+(Q1 2026: January - March) Tj
+ET
+endstream
+endobj
+
+7 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+
+8 0 obj
+<< >>
+stream
+BT
+/F1 12 Tf
+50 750 Td
+(Page 1: Checking Transactions) Tj
+0 -20 Td
+(1/5/2026 Direct Deposit 2500.00) Tj
+0 -15 Td
+(1/10/2026 Withdrawal -500.00) Tj
+ET
+endstream
+endobj
+
+9 0 obj
+<< >>
+stream
+BT
+/F1 12 Tf
+50 750 Td
+(Page 2: Savings Transactions) Tj
+0 -20 Td
+(2/1/2026 Interest Earned 25.50) Tj
+0 -15 Td
+(3/1/2026 Dividend 75.25) Tj
+ET
+endstream
+endobj
+
+xref
+0 10
+0000000000 65535 f
+0000000009 00000 n
+0000000074 00000 n
+0000000147 00000 n
+0000000295 00000 n
+0000000443 00000 n
+0000000591 00000 n
+0000000700 00000 n
+0000000800 00000 n
+0000000950 00000 n
+trailer
+<< /Size 10 /Root 1 0 R >>
+startxref
+1100
+%%EOF

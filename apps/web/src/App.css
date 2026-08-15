@@ -15,3 +15,31 @@
         transform: translateY(0);
     }
 }
+
+.section-controls {
+    display: flex;
+    gap: 1rem;
+    margin: 2rem 0 1rem 0;
+    padding: 0 1rem;
+}
+
+.btn-add-statement {
+    padding: 0.75rem 1.5rem;
+    font-size: 0.95rem;
+    font-weight: 500;
+    background-color: #0969da;
+    color: white;
+    border: 1px solid #0969da;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-add-statement:hover {
+    background-color: #0860ca;
+    border-color: #0860ca;
+}
+
+.btn-add-statement:active {
+    background-color: #0957b8;
+}

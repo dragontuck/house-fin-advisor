@@ -1,0 +1,10 @@
+Transaction Date,Description,Debit,Credit,Balance
+01/05/2026,Previous Balance - Credit Card Statement,,2500.00,2500.00
+01/10/2026,Coffee Shop,4.50,,2495.50
+01/12/2026,Online Shopping,125.99,,2369.51
+01/15/2026,Gas Station,45.00,,2324.51
+01/18/2026,Restaurant,68.50,,2256.01
+01/20/2026,Pharmacy,23.45,,2232.56
+01/22/2026,Grocery Store,156.78,,2075.78
+01/25/2026,Payment from checking - Card Payment,,500.00,2575.78
+01/28/2026,Subscription Service,9.99,,2565.79

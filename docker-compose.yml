@@ -1,6 +1,6 @@
 version: '3.8'
 
-# NOTE: This project uses existing shared infrastructure
+# NOTE: This project uses existing shared infrastructure + local services
 # 
 # External Services (already running):
 #   - PostgreSQL: localhost:5434 (house_financial database)
@@ -10,14 +10,17 @@ version: '3.8'
 # Local Services (containerized):
 #   - API: http://localhost:6723 (Express server)
 #   - Web: http://localhost:6713 (React dev server with hot reload)
+#   - MinIO: http://localhost:9000 (S3-compatible object storage)
+#   - MinIO Console: http://localhost:9001 (MinIO UI - user: minioadmin, pass: minioadmin)
 #
-# To start services manually:
-#   docker-compose up api web
+# To start services:
+#   docker-compose up api web minio
 #
 # To test that existing services are accessible:
 #   psql -h localhost -p 5434 -U hf_admin -d house_financial -c "SELECT 1"
 #   redis-cli -p 6379 ping
 #   curl -k https://keycloak.keystone.internal:7443/health/ready
+#   curl http://localhost:9000/minio/health/live
 
 services:
   api:
@@ -36,6 +39,10 @@ services:
       - DB_USER=hf_admin
       - DB_PASSWORD=hf_admin
       - REDIS_URL=redis://host.docker.internal:6379
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET=statements
       - LOG_LEVEL=info
     volumes:
       - ./apps/api/src:/app/src
@@ -60,6 +67,31 @@ services:
       - ./packages:/app/packages
     networks:
       - default
+
+  minio:
+    image: minio/minio:latest
+    container_name: house-fin-minio
+    restart: no
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    volumes:
+      - minio_data:/data
+    command: minio server /data --console-address ":9001"
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+volumes:
+  minio_data:
+    driver: local
 
 networks:
   default:

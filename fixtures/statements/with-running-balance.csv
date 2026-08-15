@@ -1,0 +1,11 @@
+Posted Date,Transaction Description,Withdrawal,Deposit,Running Balance
+01/01/2026,Opening Balance,,10000.00,10000.00
+01/05/2026,Rent Payment,1500.00,,8500.00
+01/07/2026,Paycheck Deposit,,2500.00,11000.00
+01/10/2026,Utilities,125.50,,10874.50
+01/12/2026,Groceries,87.65,,10786.85
+01/15/2026,Gas,45.00,,10741.85
+01/18/2026,Dining Out,52.30,,10689.55
+01/20/2026,ATM Withdrawal,100.00,,10589.55
+01/22/2026,Transfer In,,250.00,10839.55
+01/25/2026,Insurance Payment,200.00,,10639.55

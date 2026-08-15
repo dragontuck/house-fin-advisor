@@ -1,0 +1,10 @@
+Transaction Date,Memo,Posted Amount
+01/05/2026,Initial Balance,5000.00
+01/08/2026,Purchase - Electronics,-299.99
+01/10/2026,Refund - Electronics,299.99
+01/12/2026,Gas Purchase,-45.00
+01/15/2026,ATM Withdrawal,-200.00
+01/17/2026,Check Deposit,500.00
+01/20/2026,Service Charge,-5.00
+01/25/2026,Direct Deposit,2000.00
+01/28/2026,Wire Transfer Out,-1000.00
