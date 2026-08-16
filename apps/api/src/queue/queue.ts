@@ -34,29 +34,35 @@ export function createDocumentProcessingQueue(): BullQueue<DocumentProcessingJob
                 return delay;
             },
         },
+        defaultJobOptions: {
+            // Retry failed jobs 3 times with exponential backoff
+            attempts: 3,
+            backoff: {
+                type: 'exponential',
+                delay: 2000,
+            },
+            // Remove job from queue after completion
+            removeOnComplete: true,
+            // Keep failed jobs for debugging
+            removeOnFail: false,
+        },
         settings: {
-            // Process 1 job at a time per worker
-            concurrency: 1,
-
             // Jobs have max 5 minutes to complete
             lockDuration: 5 * 60 * 1000,
 
             // Renew lock every 1 minute (lockDuration / 2)
             lockRenewTime: 1 * 60 * 1000,
 
-            // Retry failed jobs 3 times with exponential backoff
+            // Retry stalled jobs 2 times
             maxStalledCount: 2,
 
-            // Move stalled jobs back to active after 30 seconds
+            // Check for stalled jobs every 30 seconds
             stalledInterval: 30 * 1000,
-
-            // Failed jobs go to dead-letter queue after 3 attempts
-            maxRetriesPerJob: 3,
         },
     });
 
     // Event handlers for monitoring
-    queue.on("error", (err) => {
+    queue.on("error", (err: Error) => {
         console.error("Queue error:", err);
     });
 

@@ -299,6 +299,10 @@ export class ObjectStorageAdapter {
     /**
      * Creates a temporary signed URL for file download
      * URL expires after specified duration
+     * 
+     * SECURITY: Caller MUST verify householdId ownership before calling this method.
+     * This method validates key format but does NOT check authorization.
+     * 
      * @param objectKey Object storage key
      * @param expirySeconds How long URL is valid (default: 1 hour)
      * @returns Signed URL for download
@@ -320,6 +324,41 @@ export class ObjectStorageAdapter {
                 `Failed to generate signed URL: ${error instanceof Error ? error.message : String(error)}`
             );
         }
+    }
+
+    /**
+     * Creates a temporary signed URL for file download with authorization check
+     * Verifies that the document belongs to the specified household before generating URL
+     * 
+     * @param householdId Household ID requesting download
+     * @param documentId Document ID to download
+     * @param objectKey Object storage key
+     * @param documentRepo Repository to verify ownership
+     * @param expirySeconds How long URL is valid (default: 1 hour)
+     * @returns Signed URL for download
+     * @throws Error if document not found or access denied
+     */
+    async getAuthorizedDownloadUrl(
+        householdId: string,
+        documentId: string,
+        objectKey: string,
+        documentRepo: any, // FinancialDocumentRepository interface
+        expirySeconds: number = 3600
+    ): Promise<string> {
+        // Verify document belongs to household
+        const document = await documentRepo.findById(documentId);
+        if (!document) {
+            throw new Error("Document not found");
+        }
+        if (document.householdId !== householdId) {
+            throw new Error("Access denied: document does not belong to this household");
+        }
+        if (document.objectStorageKey !== objectKey) {
+            throw new Error("Access denied: object key mismatch");
+        }
+
+        // Authorization verified - generate signed URL
+        return this.getSignedDownloadUrl(objectKey, expirySeconds);
     }
 }
 

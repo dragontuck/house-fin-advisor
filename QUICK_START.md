@@ -4,7 +4,10 @@
 
 ### Prerequisites
 - Docker & Docker Compose
-- Node.js 20+ (for local development)
+- Access to shared infrastructure:
+  - PostgreSQL on `localhost:5434`
+  - Redis on `localhost:6379` (with password)
+  - Keycloak on `https://keycloak.keystone.internal:7443/`
 
 ### Start the Full Stack
 
@@ -13,24 +16,26 @@
 cd house-fin-advisor
 
 # Start all services using Docker Compose
-docker-compose up api web
+docker compose up -d --build
 
 # Wait for services to be ready (~30-60 seconds)
-# You'll see:
-# - api: "API server listening on port 3000"
-# - web: "Local: http://localhost:6713"
+# Check logs:
+docker logs house-fin-api --tail 20
+docker logs house-fin-web --tail 20
 ```
 
 **Access the application**:
-- 🌐 **Web UI**: http://localhost:6713 → Financial Pulse dashboard
-- 📡 **API**: http://localhost:6723/api
+- 🌐 **Web UI**: http://localhost:6173 → Financial Pulse dashboard
+- 📡 **API**: http://localhost:6723
   - `/financial-pulse` → Main endpoint for UI
   - `/household` → Household info
   - `/accounts` → List of accounts
-- 🗄️ **Database**: localhost:5434
+- 🗄️ **PostgreSQL**: localhost:5434
   - User: `hf_admin`
   - Password: `hf_admin`
   - Database: `house_financial`
+- 🔴 **Redis**: localhost:6379 (password required)
+- 📦 **MinIO Console**: http://localhost:9001 (user: minioadmin, pass: minioadmin)
 
 ### What You'll See
 
@@ -75,30 +80,35 @@ npm test -- --watch
 
 ```bash
 # Option 1: Using Docker Compose (Recommended)
-docker-compose up api web
+docker compose up -d --build
+
+# View logs
+docker logs -f house-fin-api
+docker logs -f house-fin-web
+
+# Stop services
+docker compose down
 
 # Option 2: Local development without Docker (advanced)
-# Install dependencies (one-time)
+# Requires direct access to PostgreSQL, Redis, and Keycloak
 npm install
 
-# Start services locally
-npm run dev
+# Start API (Terminal 1)
+cd apps/api && npm run dev
+# Runs on http://localhost:6723
 
-# This starts:
-# - API: http://localhost:3000
-# - Web: http://localhost:5173 (with hot reload)
-# Note: Requires local PostgreSQL/Redis already running
-#
-# When using Docker Compose, access at:
-# - API: http://localhost:6723
-# - Web: http://localhost:6713
+# Start Web (Terminal 2)
+cd apps/web && npm run dev
+# Runs on http://localhost:6173 (with hot reload)
 ```
 
 ## 📡 Try the API
 
 ### Get Financial Pulse (Main Endpoint)
 ```bash
-curl http://localhost:3000/api/financial-pulse | jq
+curl http://localhost:6723/financial-pulse | jq
+# or through the web proxy:
+curl http://localhost:6173/api/financial-pulse | jq
 ```
 
 Response includes:
@@ -109,17 +119,17 @@ Response includes:
 
 ### Get Household Info
 ```bash
-curl http://localhost:3000/api/household | jq
+curl http://localhost:6723/household | jq
 ```
 
 ### List Accounts
 ```bash
-curl http://localhost:3000/api/accounts | jq
+curl http://localhost:6723/accounts | jq
 ```
 
 ### Create New Account
 ```bash
-curl -X POST http://localhost:3000/api/accounts \
+curl -X POST http://localhost:6723/accounts \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Emergency Fund",

@@ -4,6 +4,7 @@
  */
 
 import express, { Express, Request, Response, NextFunction } from "express";
+import cors from "cors";
 import { v4 as uuidv4 } from "uuid";
 import {
     EntityId,
@@ -93,6 +94,15 @@ export function createServer(): Express {
     // Middleware: Parse JSON
     app.use(express.json());
 
+    // Middleware: CORS - Allow requests from web app
+    app.use(cors({
+        origin: process.env.CORS_ORIGIN || 'http://localhost:6173',
+        credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'x-household-id', 'x-correlation-id'],
+        exposedHeaders: ['x-correlation-id']
+    }));
+
     // Middleware: Add correlation ID and request context
     app.use((req: Request, res: Response, next: NextFunction) => {
         // Slice 1: Use hardcoded household ID or from header if provided
@@ -141,7 +151,10 @@ export function createServer(): Express {
     const storageAdapter = createObjectStorageAdapter();
     // Ensure bucket exists on startup
     storageAdapter.ensureBucket().catch((error) => {
-        console.error("Failed to initialize object storage:", error);
+        console.error("[STORAGE_INIT_FAILED] Failed to initialize object storage", {
+            errorMessage: error instanceof Error ? error.message : String(error),
+            timestamp: new Date().toISOString()
+        });
     });
 
     // Health check
@@ -658,33 +671,62 @@ export function createServer(): Express {
                 // Upload file to object storage
                 await storageAdapter.uploadFile(objectStorageKey, fileBuffer, mimeType);
 
-                // Create document record in database
-                const document = await documentRepo.create({
-                    householdId,
-                    sourceType: sourceType as DocumentSourceType,
-                    fileName,
-                    mimeType,
-                    fileSizeBytes: fileSize,
-                    fileChecksum,
-                    objectStorageKey,
-                    accountId: accountId ? (accountId as EntityId) : undefined,
-                    institutionName: institutionName || undefined,
-                    statementType: statementType || undefined,
-                    periodStart: periodStart ? new Date(periodStart) : undefined,
-                    periodEnd: periodEnd ? new Date(periodEnd) : undefined,
-                    processingStatus: DocumentProcessingStatus.UPLOADED,
-                    processingVersion: 1,
-                    uploadedBy: "system", // TODO: Extract from OAuth token in Slice 2
-                    uploadedAt: new Date(),
-                    correlationId: EntityId(correlationId),
-                });
+                // Create document record in database with cleanup on failure
+                let document;
+                try {
+                    document = await documentRepo.create({
+                        householdId,
+                        sourceType: sourceType as DocumentSourceType,
+                        fileName,
+                        mimeType,
+                        fileSizeBytes: fileSize,
+                        fileChecksum,
+                        objectStorageKey,
+                        accountId: accountId ? (accountId as EntityId) : undefined,
+                        institutionName: institutionName || undefined,
+                        statementType: statementType || undefined,
+                        periodStart: periodStart ? new Date(periodStart) : undefined,
+                        periodEnd: periodEnd ? new Date(periodEnd) : undefined,
+                        processingStatus: DocumentProcessingStatus.UPLOADED,
+                        processingVersion: 1,
+                        uploadedBy: "system", // TODO: Extract from OAuth token in Slice 2
+                        uploadedAt: new Date(),
+                        correlationId: EntityId(correlationId),
+                    });
+                } catch (dbError) {
+                    // Database failed - clean up uploaded file to prevent orphans
+                    try {
+                        await storageAdapter.deleteFile(objectStorageKey);
+                        console.error("[UPLOAD_CLEANUP] Deleted orphaned file after database failure", {
+                            correlationId,
+                            objectStorageKey,
+                            householdId
+                        });
+                    } catch (cleanupError) {
+                        // Log cleanup failure but don't mask original error
+                        console.error("[UPLOAD_CLEANUP_FAILED] Failed to delete orphaned file", {
+                            correlationId,
+                            objectStorageKey,
+                            householdId,
+                            cleanupError: cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+                        });
+                    }
+                    // Re-throw original database error
+                    throw dbError;
+                }
 
                 // Enqueue document for background processing
                 try {
                     const documentQueue = getDocumentProcessingQueue();
                     await enqueueDocumentProcessing(document.id, householdId, correlationId);
                 } catch (queueError) {
-                    console.error("Failed to enqueue document for processing:", queueError);
+                    // Structured logging - no PII exposure
+                    console.error("[QUEUE_ENQUEUE_FAILED] Failed to enqueue document for processing", {
+                        correlationId,
+                        documentId: document.id,
+                        householdId,
+                        errorMessage: queueError instanceof Error ? queueError.message : String(queueError)
+                    });
                     // Don't fail the upload - queue error shouldn't block upload response
                     // Client can still check status via polling
                 }
@@ -1320,12 +1362,23 @@ export function createServer(): Express {
 
     /**
      * Global error handler
+     * Uses structured logging to prevent PII exposure in logs
      */
     app.use((err: any, req: Request, res: Response, next: NextFunction) => {
         const correlationId = req.context?.correlationId || uuidv4();
 
-        // Log error (in production, would log to external service)
-        console.error(`[${correlationId}] Error:`, err);
+        // Structured error logging - no raw error objects or stack traces
+        console.error("[REQUEST_ERROR] API error occurred", {
+            correlationId,
+            errorType: err.constructor?.name || 'Unknown',
+            errorMessage: err instanceof Error ? err.message : String(err),
+            statusCode: err.statusCode || 500,
+            errorCode: err.errorCode || 'INTERNAL_ERROR',
+            path: req.path,
+            method: req.method,
+            householdId: req.context?.householdId || 'anonymous',
+            timestamp: new Date().toISOString()
+        });
 
         // Handle known API errors
         if (err instanceof ApiError) {
@@ -1379,6 +1432,9 @@ export function createServer(): Express {
  */
 export async function startServer(port: number = 6723): Promise<void> {
     const app = createServer();
+
+    // Initialize document repository for worker
+    const documentRepo = new PgFinancialDocumentRepository();
 
     // Initialize document processing queue
     const documentQueue = getDocumentProcessingQueue();

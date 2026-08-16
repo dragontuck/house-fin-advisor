@@ -25,13 +25,14 @@ psql -h localhost -p 5434 -U hf_admin -d house_financial -c "SELECT 1"
 
 ### Redis Cache
 ```
-Host: localhost
-Port: 6379
+Host:     localhost
+Port:     6379
+Password: T5dKlEcGA7WGS279vqZxYb3JmN
 ```
 
 **Verify connection:**
 ```bash
-redis-cli -p 6379 ping
+redis-cli -p 6379 -a T5dKlEcGA7WGS279vqZxYb3JmN ping
 # Should return: PONG
 ```
 

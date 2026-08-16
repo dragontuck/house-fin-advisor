@@ -33,9 +33,6 @@ export const uploadRateLimiter = rateLimit({
         retryAfter: 60,
     },
 
-    // Don't rate limit by default, only on upload endpoint
-    skip: false,
-
     // Standard headers RateLimit-Limit and RateLimit-Remaining
     standardHeaders: true,
 
@@ -63,7 +60,6 @@ export const generalRateLimiter = rateLimit({
         retryAfter: 60,
     },
 
-    skip: false,
     standardHeaders: true,
     legacyHeaders: false,
 });
@@ -89,7 +85,6 @@ export const authRateLimiter = rateLimit({
         retryAfter: 900,
     },
 
-    skip: false,
     standardHeaders: true,
     legacyHeaders: false,
 });

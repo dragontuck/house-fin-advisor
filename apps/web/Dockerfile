@@ -15,7 +15,7 @@ COPY apps ./apps
 # Install dependencies
 RUN npm ci
 
-EXPOSE 6713
+EXPOSE 6173
 
 # Start the Vite dev server with HMR enabled
 CMD ["npm", "run", "dev", "--workspace=apps/web"]

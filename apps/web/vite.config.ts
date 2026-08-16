@@ -6,9 +6,10 @@ export default defineConfig({
     plugins: [react()],
     server: {
         port: 6173,
+        host: '0.0.0.0', // Allow access from outside container
         proxy: {
             '/api': {
-                target: 'http://localhost:6723',
+                target: process.env.VITE_API_PROXY_TARGET || 'http://house-fin-api:6723',
                 changeOrigin: true,
                 rewrite: (path) => path.replace(/^\/api/, '')
             }

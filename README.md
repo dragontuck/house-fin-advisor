@@ -46,21 +46,30 @@ The first vertical slice establishes the core domain, API, persistence, financia
 
 This project uses existing shared infrastructure. Ensure you have access to:
 - **PostgreSQL** on `localhost:5434`
-- **Redis** on `localhost:6379`
+- **Redis** on `localhost:6379` (password required)
 - **Keycloak** on `https://keycloak.keystone.internal:7443/`
 
-Then start the local development servers:
+**Using Docker (Recommended)**:
+```bash
+# Start all services
+docker compose up -d --build
 
+# Access:
+# - Web UI: http://localhost:6173
+# - API: http://localhost:6723
+```
+
+**Local Development** (requires infrastructure access):
 ```bash
 # Terminal 1: API server
 cd apps/api
 npm run dev
-# Output: Server running on http://localhost:3000
+# Output: Server running on http://localhost:6723
 
 # Terminal 2: Web UI
 cd apps/web
 npm run dev
-# Output: VITE ready at http://localhost:5173
+# Output: VITE ready at http://localhost:6173
 ```
 
 For first-time setup, apply database migrations:
@@ -91,9 +100,15 @@ npm run type-check # Type checking
 ```
 
 **Infrastructure Details:**
-- PostgreSQL: `localhost:5434` (user: `hf_admin`, db: `house_financial`)
-- Redis: `localhost:6379`
+- PostgreSQL: `localhost:5434` (user: `hf_admin`, password: `hf_admin`, db: `house_financial`)
+- Redis: `localhost:6379` (password required - see [infrastructure docs](./docs/USING_EXISTING_INFRASTRUCTURE.md))
 - Keycloak: `https://keycloak.keystone.internal:7443/` (realm: `house-fin`)
+- MinIO (Docker): `localhost:9000` (object storage for documents)
+
+**Docker Services:**
+- API: `http://localhost:6723` (Express + TypeScript)
+- Web: `http://localhost:6173` (React + Vite with hot reload)
+- MinIO Console: `http://localhost:9001` (user: minioadmin)
 
 📖 [Existing Infrastructure Guide](./docs/USING_EXISTING_INFRASTRUCTURE.md)
 

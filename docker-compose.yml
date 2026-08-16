@@ -9,7 +9,7 @@ version: '3.8'
 #
 # Local Services (containerized):
 #   - API: http://localhost:6723 (Express server)
-#   - Web: http://localhost:6713 (React dev server with hot reload)
+#   - Web: http://localhost:6173 (React dev server with hot reload)
 #   - MinIO: http://localhost:9000 (S3-compatible object storage)
 #   - MinIO Console: http://localhost:9001 (MinIO UI - user: minioadmin, pass: minioadmin)
 #
@@ -38,7 +38,9 @@ services:
       - DB_NAME=house_financial
       - DB_USER=hf_admin
       - DB_PASSWORD=hf_admin
-      - REDIS_URL=redis://host.docker.internal:6379
+      - REDIS_HOST=host.docker.internal
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=T5dKlEcGA7WGS279vqZxYb3JmN
       - MINIO_ENDPOINT=http://minio:9000
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
@@ -57,13 +59,14 @@ services:
     container_name: house-fin-web
     restart: no
     ports:
-      - "6713:6713"
+      - "6173:6173"
     environment:
       - NODE_ENV=development
-      - VITE_API_BASE_URL=http://localhost:6723/api
+      - VITE_API_BASE_URL=/api
     volumes:
       - ./apps/web/src:/app/src
       - ./apps/web/index.html:/app/index.html
+      - ./apps/web/vite.config.ts:/app/apps/web/vite.config.ts
       - ./packages:/app/packages
     networks:
       - default
