@@ -107,7 +107,7 @@ export declare class TransactionPostingService {
     private reviewQueueService;
     private documentRepo;
     private reconciliationRepo?;
-    constructor(postingRepo: IPostingRepository, snapshotCalculator: IFinancialSnapshotCalculator, reviewQueueService: IReviewQueueService, documentRepo: IFinancialDocumentRepository, reconciliationRepo?: IReconciliationRepository | undefined);
+    constructor(postingRepo: IPostingRepository, snapshotCalculator: IFinancialSnapshotCalculator, reviewQueueService: IReviewQueueService, documentRepo: IFinancialDocumentRepository, reconciliationRepo?: IReconciliationRepository);
     /**
      * Post a statement's reconciled transactions to canonical ledger
      *

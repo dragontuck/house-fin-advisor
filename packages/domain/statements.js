@@ -3,9 +3,6 @@
  * Statement/Financial Document domain model and services
  * Implements document lifecycle, versioning, and storage key management
  */
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.VALID_STATUS_TRANSITIONS = void 0;
 exports.calculateFileChecksum = calculateFileChecksum;
@@ -15,7 +12,7 @@ exports.validateFileContent = validateFileContent;
 exports.isValidStatusTransition = isValidStatusTransition;
 exports.createUserFacingError = createUserFacingError;
 const contracts_1 = require("@house-fin/contracts");
-const crypto_1 = __importDefault(require("crypto"));
+const crypto_1 = require("crypto");
 /**
  * Calculates SHA-256 checksum of file buffer
  * @param fileBuffer Buffer containing file contents

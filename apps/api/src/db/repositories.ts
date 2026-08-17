@@ -38,11 +38,18 @@ import {
     CreateFinancialDocumentInput,
     IReviewRepository,
     IPostingRepository,
+    IBudgetRepository,
+    ICashFlowRepository,
+    ISavingsGoalRepository,
+    IDebtRepository,
 } from "@house-fin/domain";
 import {
     PostedTransaction,
     StatementPostingAudit,
     AutoPostConfig,
+    Budget,
+    SavingsGoal,
+    GoalType,
 } from "@house-fin/contracts";
 
 // Type for database row objects
@@ -270,6 +277,46 @@ export class PgAccountRepository implements AccountRepository {
         return this.rowToAccount(result.rows[0]);
     }
 
+    async updateDebtDetails(id: EntityId, details: {
+        creditLimitCents?: number | null;
+        interestRateBps?: number | null;
+        minimumPaymentCents?: number | null;
+        scheduledPaymentCents?: number | null;
+        statementBalanceCents?: number | null;
+        revolvingBalanceCents?: number | null;
+    }): Promise<Account> {
+        const updates: string[] = [];
+        const values: unknown[] = [];
+        let p = 1;
+
+        const cols: [keyof typeof details, string][] = [
+            ["creditLimitCents", "credit_limit_cents"],
+            ["interestRateBps", "interest_rate_bps"],
+            ["minimumPaymentCents", "minimum_payment_cents"],
+            ["scheduledPaymentCents", "scheduled_payment_cents"],
+            ["statementBalanceCents", "statement_balance_cents"],
+            ["revolvingBalanceCents", "revolving_balance_cents"],
+        ];
+
+        for (const [key, col] of cols) {
+            if (Object.prototype.hasOwnProperty.call(details, key)) {
+                updates.push(`${col} = $${p++}`);
+                values.push(details[key] ?? null);
+            }
+        }
+
+        if (updates.length === 0) throw new Error("No debt detail fields to update");
+
+        updates.push(`updated_at = CURRENT_TIMESTAMP`);
+        values.push(id);
+
+        const result = await query(
+            `UPDATE finhouse.accounts SET ${updates.join(", ")} WHERE id = $${p} RETURNING *`,
+            values
+        );
+        return this.rowToAccount(result.rows[0]);
+    }
+
     private rowToAccount(row: DbRow): Account {
         return {
             id: row.id as EntityId,
@@ -284,6 +331,12 @@ export class PgAccountRepository implements AccountRepository {
             status: row.status as AccountStatus,
             createdAt: row.created_at as Date,
             updatedAt: row.updated_at as Date,
+            creditLimitCents: row.credit_limit_cents as number | null ?? null,
+            interestRateBps: row.interest_rate_bps as number | null ?? null,
+            minimumPaymentCents: row.minimum_payment_cents as number | null ?? null,
+            scheduledPaymentCents: row.scheduled_payment_cents as number | null ?? null,
+            statementBalanceCents: row.statement_balance_cents as number | null ?? null,
+            revolvingBalanceCents: row.revolving_balance_cents as number | null ?? null,
         };
     }
 }
@@ -347,6 +400,14 @@ export class PgFinancialSnapshotRepository implements FinancialSnapshotRepositor
     async findAll(): Promise<FinancialSnapshot[]> {
         const result = await query("SELECT * FROM finhouse.financial_snapshots ORDER BY created_at");
         return result.rows.map((row) => this.rowToSnapshot(row));
+    }
+
+    async findByHouseholdIdSince(householdId: EntityId, since: Date): Promise<FinancialSnapshot[]> {
+        const result = await query(
+            "SELECT * FROM finhouse.financial_snapshots WHERE household_id = $1 AND as_of >= $2 ORDER BY as_of ASC",
+            [householdId, since]
+        );
+        return result.rows.map(row => this.rowToSnapshot(row));
     }
 
     private rowToSnapshot(row: DbRow): FinancialSnapshot {
@@ -463,6 +524,9 @@ export class PgHouseholdSettingsRepository implements HouseholdSettingsRepositor
             incomeSource: row.income_source as "manual_entry" | "bank_feed" | "user_provided",
             updatedAt: row.updated_at as Date,
             updatedBy: row.updated_by as EntityId,
+            emergencyFundMinimumMonths: (row.emergency_fund_min_months as number) ?? 3,
+            emergencyFundTargetMonths: (row.emergency_fund_target_months as number) ?? 6,
+            emergencyFundStretchMonths: (row.emergency_fund_stretch_months as number) ?? 9,
         };
     }
 }
@@ -1345,6 +1409,472 @@ export class PgPostingRepository implements IPostingRepository {
             idempotencyKey: row.idempotency_key as string,
             startedAt: new Date(row.started_at as string),
             completedAt: row.completed_at ? new Date(row.completed_at as string) : undefined,
+        };
+    }
+}
+
+import { BudgetTransaction, CashFlowTransaction } from "@house-fin/domain";
+
+/**
+ * PostgreSQL BudgetRepository
+ */
+export class PgBudgetRepository implements IBudgetRepository {
+    async create(
+        budget: Omit<Budget, "id" | "createdAt" | "updatedAt" | "version">
+    ): Promise<Budget> {
+        const result = await query(
+            `INSERT INTO finhouse.budgets
+             (household_id, period_year, period_month, category, amount_cents, goal_id, notes)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             RETURNING *`,
+            [
+                budget.householdId,
+                budget.periodYear,
+                budget.periodMonth,
+                budget.category,
+                budget.amountCents,
+                budget.goalId ?? null,
+                budget.notes ?? null,
+            ]
+        );
+        return this.rowToBudget(result.rows[0]);
+    }
+
+    async findById(id: EntityId): Promise<Budget | null> {
+        const result = await query(
+            "SELECT * FROM finhouse.budgets WHERE id = $1",
+            [id]
+        );
+        if (result.rows.length === 0) return null;
+        return this.rowToBudget(result.rows[0]);
+    }
+
+    async findByHouseholdAndPeriod(
+        householdId: EntityId,
+        year: number,
+        month: number
+    ): Promise<Budget[]> {
+        const result = await query(
+            `SELECT * FROM finhouse.budgets
+             WHERE household_id = $1 AND period_year = $2 AND period_month = $3
+             ORDER BY category`,
+            [householdId, year, month]
+        );
+        return result.rows.map(row => this.rowToBudget(row));
+    }
+
+    async findByCategory(
+        householdId: EntityId,
+        year: number,
+        month: number,
+        category: string
+    ): Promise<Budget | null> {
+        const result = await query(
+            `SELECT * FROM finhouse.budgets
+             WHERE household_id = $1 AND period_year = $2 AND period_month = $3 AND category = $4`,
+            [householdId, year, month, category]
+        );
+        if (result.rows.length === 0) return null;
+        return this.rowToBudget(result.rows[0]);
+    }
+
+    async update(
+        id: EntityId,
+        updates: { amountCents?: number; notes?: string },
+        expectedVersion: number
+    ): Promise<Budget> {
+        const setClauses: string[] = ["version = version + 1", "updated_at = CURRENT_TIMESTAMP"];
+        const values: unknown[] = [];
+        let i = 1;
+
+        if (updates.amountCents !== undefined) {
+            setClauses.push(`amount_cents = $${i++}`);
+            values.push(updates.amountCents);
+        }
+        if (updates.notes !== undefined) {
+            setClauses.push(`notes = $${i++}`);
+            values.push(updates.notes ?? null);
+        }
+
+        values.push(id, expectedVersion);
+        const result = await query(
+            `UPDATE finhouse.budgets SET ${setClauses.join(", ")}
+             WHERE id = $${i++} AND version = $${i}
+             RETURNING *`,
+            values
+        );
+        if (result.rows.length === 0) {
+            throw new Error("Budget not found or version conflict — reload and retry");
+        }
+        return this.rowToBudget(result.rows[0]);
+    }
+
+    async delete(id: EntityId, householdId: EntityId): Promise<void> {
+        const result = await query(
+            "DELETE FROM finhouse.budgets WHERE id = $1 AND household_id = $2 RETURNING id",
+            [id, householdId]
+        );
+        if (result.rows.length === 0) {
+            throw new Error("Budget not found");
+        }
+    }
+
+    async getTransactionsForPeriod(
+        householdId: EntityId,
+        year: number,
+        month: number
+    ): Promise<BudgetTransaction[]> {
+        // Pad month to 2 digits for the date range
+        const monthStr = String(month).padStart(2, "0");
+        const fromDate = `${year}-${monthStr}-01`;
+        // Last day: first day of next month minus one day
+        const nextMonth = month === 12 ? 1 : month + 1;
+        const nextYear = month === 12 ? year + 1 : year;
+        const nextMonthStr = String(nextMonth).padStart(2, "0");
+        const toDate = `${nextYear}-${nextMonthStr}-01`;
+
+        const result = await query(
+            `SELECT id, category, amount_cents, transaction_date
+             FROM finhouse.posted_transactions
+             WHERE household_id = $1
+               AND transaction_date >= $2
+               AND transaction_date < $3
+             ORDER BY transaction_date`,
+            [householdId, fromDate, toDate]
+        );
+
+        return result.rows.map(row => ({
+            id: row.id as string,
+            category: (row.category as string | null) ?? null,
+            amountCents: row.amount_cents as number,
+            transactionDate: new Date(row.transaction_date as string),
+        }));
+    }
+
+    async categorizeTransaction(
+        transactionId: string,
+        householdId: EntityId,
+        category: string
+    ): Promise<void> {
+        const result = await query(
+            `UPDATE finhouse.posted_transactions
+             SET category = $1
+             WHERE id = $2 AND household_id = $3
+             RETURNING id`,
+            [category.trim() || null, transactionId, householdId]
+        );
+        if (result.rows.length === 0) {
+            throw new Error("Transaction not found");
+        }
+    }
+
+    private rowToBudget(row: DbRow): Budget {
+        return {
+            id: row.id as EntityId,
+            householdId: row.household_id as EntityId,
+            periodYear: row.period_year as number,
+            periodMonth: row.period_month as number,
+            category: row.category as string,
+            amountCents: row.amount_cents as Money,
+            goalId: row.goal_id ? (row.goal_id as EntityId) : undefined,
+            notes: row.notes ? (row.notes as string) : undefined,
+            version: row.version as number,
+            createdAt: new Date(row.created_at as string),
+            updatedAt: new Date(row.updated_at as string),
+        };
+    }
+}
+
+/**
+ * PostgreSQL CashFlowRepository
+ */
+export class PgCashFlowRepository implements ICashFlowRepository {
+    async getTransactionsForRange(
+        householdId: EntityId,
+        fromDate: Date,
+        toDate: Date,
+    ): Promise<CashFlowTransaction[]> {
+        const result = await query(
+            `SELECT id, transaction_date, amount_cents, direction, merchant, category, account_id
+             FROM finhouse.posted_transactions
+             WHERE household_id = $1
+               AND transaction_date >= $2
+               AND transaction_date < $3
+             ORDER BY transaction_date`,
+            [householdId, fromDate.toISOString().split("T")[0], toDate.toISOString().split("T")[0]],
+        );
+        return result.rows.map(row => ({
+            id: row.id as string,
+            transactionDate: new Date(row.transaction_date as string),
+            amountCents: row.amount_cents as number,
+            direction: row.direction as "DEBIT" | "CREDIT",
+            merchant: row.merchant as string,
+            category: (row.category as string | null) ?? null,
+            accountId: row.account_id as string,
+        }));
+    }
+
+    async getLiquidCashCents(householdId: EntityId): Promise<number> {
+        const result = await query(
+            `SELECT COALESCE(SUM(current_balance_cents), 0) AS total
+             FROM finhouse.accounts
+             WHERE household_id = $1
+               AND status = 'ACTIVE'
+               AND type IN ('CHECKING', 'SAVINGS')`,
+            [householdId],
+        );
+        return Number(result.rows[0].total);
+    }
+
+    async getHouseholdSettings(householdId: EntityId): Promise<HouseholdSettings | null> {
+        const result = await query(
+            "SELECT * FROM finhouse.household_settings WHERE household_id = $1",
+            [householdId],
+        );
+        if (result.rows.length === 0) return null;
+        const row = result.rows[0];
+        return {
+            id: row.id as EntityId,
+            householdId: row.household_id as EntityId,
+            monthlyIncome: row.monthly_income_cents as Money,
+            monthlyEssentialExpenses: row.monthly_essential_expenses_cents as Money,
+            monthlyDiscretionaryExpenses: row.monthly_discretionary_expenses_cents as Money,
+            currency: row.currency as string,
+            incomeSource: row.income_source as "manual_entry" | "bank_feed" | "user_provided",
+            updatedAt: new Date(row.updated_at as string),
+            updatedBy: row.updated_by as EntityId,
+            emergencyFundMinimumMonths: (row.emergency_fund_min_months as number) ?? 3,
+            emergencyFundTargetMonths: (row.emergency_fund_target_months as number) ?? 6,
+            emergencyFundStretchMonths: (row.emergency_fund_stretch_months as number) ?? 9,
+        };
+    }
+
+    async getBudgetsForPeriod(
+        householdId: EntityId,
+        year: number,
+        month: number,
+    ): Promise<Budget[]> {
+        const result = await query(
+            `SELECT * FROM finhouse.budgets
+             WHERE household_id = $1 AND period_year = $2 AND period_month = $3
+             ORDER BY category`,
+            [householdId, year, month],
+        );
+        return result.rows.map(row => ({
+            id: row.id as EntityId,
+            householdId: row.household_id as EntityId,
+            periodYear: row.period_year as number,
+            periodMonth: row.period_month as number,
+            category: row.category as string,
+            amountCents: row.amount_cents as Money,
+            goalId: row.goal_id ? (row.goal_id as EntityId) : undefined,
+            notes: row.notes ? (row.notes as string) : undefined,
+            version: row.version as number,
+            createdAt: new Date(row.created_at as string),
+            updatedAt: new Date(row.updated_at as string),
+        }));
+    }
+}
+
+/**
+ * PostgreSQL SavingsGoalRepository
+ */
+export class PgSavingsGoalRepository implements ISavingsGoalRepository {
+    async create(goal: Omit<SavingsGoal, "id" | "createdAt" | "updatedAt" | "version">): Promise<SavingsGoal> {
+        const result = await query(
+            `INSERT INTO finhouse.savings_goals
+             (household_id, name, type, target_amount_cents, current_amount_cents,
+              monthly_contribution_cents, target_date, start_date, notes)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+             RETURNING *`,
+            [
+                goal.householdId,
+                goal.name,
+                goal.type,
+                goal.targetAmountCents,
+                goal.currentAmountCents,
+                goal.monthlyContributionCents,
+                goal.targetDate ? goal.targetDate.toISOString().split("T")[0] : null,
+                goal.startDate.toISOString().split("T")[0],
+                goal.notes ?? null,
+            ],
+        );
+        return this.rowToGoal(result.rows[0]);
+    }
+
+    async findById(id: EntityId): Promise<SavingsGoal | null> {
+        const result = await query(
+            "SELECT * FROM finhouse.savings_goals WHERE id = $1",
+            [id],
+        );
+        return result.rows.length === 0 ? null : this.rowToGoal(result.rows[0]);
+    }
+
+    async findByHouseholdId(householdId: EntityId): Promise<SavingsGoal[]> {
+        const result = await query(
+            "SELECT * FROM finhouse.savings_goals WHERE household_id = $1 ORDER BY created_at",
+            [householdId],
+        );
+        return result.rows.map(r => this.rowToGoal(r));
+    }
+
+    async findEmergencyFundGoal(householdId: EntityId): Promise<SavingsGoal | null> {
+        const result = await query(
+            "SELECT * FROM finhouse.savings_goals WHERE household_id = $1 AND type = 'EMERGENCY_FUND' LIMIT 1",
+            [householdId],
+        );
+        return result.rows.length === 0 ? null : this.rowToGoal(result.rows[0]);
+    }
+
+    async update(
+        id: EntityId,
+        updates: {
+            name?: string;
+            targetAmountCents?: number;
+            currentAmountCents?: number;
+            monthlyContributionCents?: number;
+            targetDate?: Date | null;
+            notes?: string | null;
+        },
+        expectedVersion: number,
+    ): Promise<SavingsGoal> {
+        const setClauses: string[] = ["version = version + 1", "updated_at = CURRENT_TIMESTAMP"];
+        const values: unknown[] = [];
+        let i = 1;
+
+        if (updates.name !== undefined) { setClauses.push(`name = $${i++}`); values.push(updates.name); }
+        if (updates.targetAmountCents !== undefined) { setClauses.push(`target_amount_cents = $${i++}`); values.push(updates.targetAmountCents); }
+        if (updates.currentAmountCents !== undefined) { setClauses.push(`current_amount_cents = $${i++}`); values.push(updates.currentAmountCents); }
+        if (updates.monthlyContributionCents !== undefined) { setClauses.push(`monthly_contribution_cents = $${i++}`); values.push(updates.monthlyContributionCents); }
+        if ("targetDate" in updates) { setClauses.push(`target_date = $${i++}`); values.push(updates.targetDate ? updates.targetDate.toISOString().split("T")[0] : null); }
+        if ("notes" in updates) { setClauses.push(`notes = $${i++}`); values.push(updates.notes ?? null); }
+
+        values.push(id, expectedVersion);
+        const result = await query(
+            `UPDATE finhouse.savings_goals
+             SET ${setClauses.join(", ")}
+             WHERE id = $${i++} AND household_id IN (SELECT household_id FROM finhouse.savings_goals WHERE id = $${i - 1}) AND version = $${i}
+             RETURNING *`,
+            values,
+        );
+        if (result.rows.length === 0) {
+            throw new Error("Savings goal not found or version conflict — reload and retry");
+        }
+        return this.rowToGoal(result.rows[0]);
+    }
+
+    async delete(id: EntityId, householdId: EntityId): Promise<void> {
+        const result = await query(
+            "DELETE FROM finhouse.savings_goals WHERE id = $1 AND household_id = $2 RETURNING id",
+            [id, householdId],
+        );
+        if (result.rows.length === 0) {
+            throw new Error("Savings goal not found");
+        }
+    }
+
+    private rowToGoal(row: DbRow): SavingsGoal {
+        return {
+            id: row.id as EntityId,
+            householdId: row.household_id as EntityId,
+            name: row.name as string,
+            type: row.type as GoalType,
+            targetAmountCents: row.target_amount_cents as Money,
+            currentAmountCents: row.current_amount_cents as Money,
+            monthlyContributionCents: row.monthly_contribution_cents as Money,
+            targetDate: row.target_date ? new Date(row.target_date as string) : null,
+            startDate: new Date(row.start_date as string),
+            notes: (row.notes as string | null) ?? null,
+            version: row.version as number,
+            createdAt: new Date(row.created_at as string),
+            updatedAt: new Date(row.updated_at as string),
+        };
+    }
+}
+
+/**
+ * PostgreSQL DebtRepository
+ */
+export class PgDebtRepository implements IDebtRepository {
+    async findActiveAccountsByHousehold(householdId: EntityId): Promise<Account[]> {
+        const result = await query(
+            "SELECT * FROM finhouse.accounts WHERE household_id = $1 AND status = 'ACTIVE' ORDER BY created_at",
+            [householdId],
+        );
+        return result.rows.map(r => this.rowToAccount(r));
+    }
+
+    async updateDebtDetails(
+        accountId: EntityId,
+        householdId: EntityId,
+        details: {
+            creditLimitCents?: number | null;
+            interestRateBps?: number | null;
+            minimumPaymentCents?: number | null;
+            scheduledPaymentCents?: number | null;
+            statementBalanceCents?: number | null;
+            revolvingBalanceCents?: number | null;
+        },
+    ): Promise<Account> {
+        // Verify ownership before update
+        const check = await query(
+            "SELECT id FROM finhouse.accounts WHERE id = $1 AND household_id = $2",
+            [accountId, householdId],
+        );
+        if (check.rows.length === 0) throw new Error("Account not found");
+
+        const cols: [keyof typeof details, string][] = [
+            ["creditLimitCents", "credit_limit_cents"],
+            ["interestRateBps", "interest_rate_bps"],
+            ["minimumPaymentCents", "minimum_payment_cents"],
+            ["scheduledPaymentCents", "scheduled_payment_cents"],
+            ["statementBalanceCents", "statement_balance_cents"],
+            ["revolvingBalanceCents", "revolving_balance_cents"],
+        ];
+
+        const setClauses: string[] = [];
+        const values: unknown[] = [];
+        let p = 1;
+
+        for (const [key, col] of cols) {
+            if (Object.prototype.hasOwnProperty.call(details, key)) {
+                setClauses.push(`${col} = $${p++}`);
+                values.push(details[key] ?? null);
+            }
+        }
+
+        if (setClauses.length === 0) throw new Error("No fields to update");
+
+        setClauses.push(`updated_at = CURRENT_TIMESTAMP`);
+        values.push(accountId);
+
+        const result = await query(
+            `UPDATE finhouse.accounts SET ${setClauses.join(", ")} WHERE id = $${p} RETURNING *`,
+            values,
+        );
+        return this.rowToAccount(result.rows[0]);
+    }
+
+    private rowToAccount(row: DbRow): Account {
+        return {
+            id: row.id as EntityId,
+            householdId: row.household_id as EntityId,
+            name: row.name as string,
+            type: row.type as AccountType,
+            ownership: row.ownership as AccountOwnership,
+            currency: row.currency as string,
+            currentBalance: row.current_balance_cents as Money,
+            institutionName: row.institution_name as string | undefined,
+            lastUpdatedAt: row.last_updated_at as Date,
+            status: row.status as AccountStatus,
+            createdAt: row.created_at as Date,
+            updatedAt: row.updated_at as Date,
+            creditLimitCents: row.credit_limit_cents as number | null ?? null,
+            interestRateBps: row.interest_rate_bps as number | null ?? null,
+            minimumPaymentCents: row.minimum_payment_cents as number | null ?? null,
+            scheduledPaymentCents: row.scheduled_payment_cents as number | null ?? null,
+            statementBalanceCents: row.statement_balance_cents as number | null ?? null,
+            revolvingBalanceCents: row.revolving_balance_cents as number | null ?? null,
         };
     }
 }

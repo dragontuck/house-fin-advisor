@@ -1,0 +1,164 @@
+{
+    "description": "Six months of monthly subscription charges. Netflix and Spotify have fixed amounts; Gym has minor month-to-month variation. All should be detected as MONTHLY with high confidence.",
+    "asOf": "2024-06-15",
+    "transactions": [
+        {
+            "id": "nf-01",
+            "transactionDate": "2024-01-12",
+            "amountCents": 1599,
+            "direction": "DEBIT",
+            "merchant": "NETFLIX.COM",
+            "category": "ENTERTAINMENT",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "nf-02",
+            "transactionDate": "2024-02-12",
+            "amountCents": 1599,
+            "direction": "DEBIT",
+            "merchant": "NETFLIX.COM",
+            "category": "ENTERTAINMENT",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "nf-03",
+            "transactionDate": "2024-03-12",
+            "amountCents": 1599,
+            "direction": "DEBIT",
+            "merchant": "NETFLIX.COM",
+            "category": "ENTERTAINMENT",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "nf-04",
+            "transactionDate": "2024-04-12",
+            "amountCents": 1599,
+            "direction": "DEBIT",
+            "merchant": "NETFLIX.COM",
+            "category": "ENTERTAINMENT",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "nf-05",
+            "transactionDate": "2024-05-12",
+            "amountCents": 1599,
+            "direction": "DEBIT",
+            "merchant": "NETFLIX.COM",
+            "category": "ENTERTAINMENT",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "sp-01",
+            "transactionDate": "2024-01-20",
+            "amountCents": 999,
+            "direction": "DEBIT",
+            "merchant": "Spotify USA",
+            "category": "ENTERTAINMENT",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "sp-02",
+            "transactionDate": "2024-02-20",
+            "amountCents": 999,
+            "direction": "DEBIT",
+            "merchant": "Spotify USA",
+            "category": "ENTERTAINMENT",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "sp-03",
+            "transactionDate": "2024-03-20",
+            "amountCents": 999,
+            "direction": "DEBIT",
+            "merchant": "Spotify USA",
+            "category": "ENTERTAINMENT",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "sp-04",
+            "transactionDate": "2024-04-20",
+            "amountCents": 999,
+            "direction": "DEBIT",
+            "merchant": "Spotify USA",
+            "category": "ENTERTAINMENT",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "sp-05",
+            "transactionDate": "2024-05-20",
+            "amountCents": 999,
+            "direction": "DEBIT",
+            "merchant": "Spotify USA",
+            "category": "ENTERTAINMENT",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "gm-01",
+            "transactionDate": "2024-01-03",
+            "amountCents": 5000,
+            "direction": "DEBIT",
+            "merchant": "City Fitness Gym",
+            "category": "HEALTH",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "gm-02",
+            "transactionDate": "2024-02-03",
+            "amountCents": 5000,
+            "direction": "DEBIT",
+            "merchant": "City Fitness Gym",
+            "category": "HEALTH",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "gm-03",
+            "transactionDate": "2024-03-04",
+            "amountCents": 5050,
+            "direction": "DEBIT",
+            "merchant": "City Fitness Gym",
+            "category": "HEALTH",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "gm-04",
+            "transactionDate": "2024-04-03",
+            "amountCents": 5000,
+            "direction": "DEBIT",
+            "merchant": "City Fitness Gym",
+            "category": "HEALTH",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "gm-05",
+            "transactionDate": "2024-05-03",
+            "amountCents": 5000,
+            "direction": "DEBIT",
+            "merchant": "City Fitness Gym",
+            "category": "HEALTH",
+            "accountId": "acct-chk"
+        }
+    ],
+    "expectedPatterns": [
+        {
+            "normalizedMerchant": "netflix",
+            "direction": "DEBIT",
+            "frequency": "MONTHLY",
+            "minConfidence": 0.75,
+            "occurrenceCount": 5
+        },
+        {
+            "normalizedMerchant": "spotify usa",
+            "direction": "DEBIT",
+            "frequency": "MONTHLY",
+            "minConfidence": 0.75,
+            "occurrenceCount": 5
+        },
+        {
+            "normalizedMerchant": "city fitness gym",
+            "direction": "DEBIT",
+            "frequency": "MONTHLY",
+            "minConfidence": 0.70,
+            "occurrenceCount": 5
+        }
+    ]
+}

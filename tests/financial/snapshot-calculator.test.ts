@@ -438,7 +438,7 @@ describe("FinancialSnapshotCalculator", () => {
             expect(snapshot.financialHealthStatus).toBe(FinancialHealthStatus.AT_RISK);
         });
 
-        it("marks household as ATTENTION for moderate finances", () => {
+        it("marks household as WATCH for moderate finances", () => {
             const accounts: Account[] = [
                 createAccount("Checking", AccountType.CHECKING, MoneyFromDollars(10000)),
                 createAccount("Savings", AccountType.SAVINGS, MoneyFromDollars(20000)),
@@ -455,7 +455,7 @@ describe("FinancialSnapshotCalculator", () => {
             });
 
             // Moderate finances - not healthy, not at risk
-            expect(snapshot.financialHealthStatus).toBe(FinancialHealthStatus.ATTENTION);
+            expect(snapshot.financialHealthStatus).toBe(FinancialHealthStatus.WATCH);
         });
 
         it("marks Tucker Household with correct status", () => {
@@ -478,7 +478,7 @@ describe("FinancialSnapshotCalculator", () => {
 
             // Tucker has positive surplus, decent net worth relative to income
             // Should be HEALTHY or ATTENTION
-            expect([FinancialHealthStatus.HEALTHY, FinancialHealthStatus.ATTENTION]).toContain(
+            expect([FinancialHealthStatus.HEALTHY, FinancialHealthStatus.WATCH]).toContain(
                 snapshot.financialHealthStatus
             );
         });

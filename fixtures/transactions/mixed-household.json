@@ -1,0 +1,605 @@
+{
+    "description": "Realistic mixed household: biweekly payroll, monthly rent, variable electric bill, monthly internet, monthly car loan, weekly grocery trips, quarterly auto insurance, and two one-off purchases. Tests the full spectrum of frequency classification and exercises noisy merchant names with reference IDs.",
+    "asOf": "2024-06-15",
+    "transactions": [
+        {
+            "id": "inc-01",
+            "transactionDate": "2024-01-05",
+            "amountCents": -310000,
+            "direction": "CREDIT",
+            "merchant": "TechWorks Inc PAYROLL 001",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "inc-02",
+            "transactionDate": "2024-01-19",
+            "amountCents": -310000,
+            "direction": "CREDIT",
+            "merchant": "TechWorks Inc PAYROLL 002",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "inc-03",
+            "transactionDate": "2024-02-02",
+            "amountCents": -310000,
+            "direction": "CREDIT",
+            "merchant": "TechWorks Inc PAYROLL 003",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "inc-04",
+            "transactionDate": "2024-02-16",
+            "amountCents": -310000,
+            "direction": "CREDIT",
+            "merchant": "TechWorks Inc PAYROLL 004",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "inc-05",
+            "transactionDate": "2024-03-01",
+            "amountCents": -310000,
+            "direction": "CREDIT",
+            "merchant": "TechWorks Inc PAYROLL 005",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "inc-06",
+            "transactionDate": "2024-03-15",
+            "amountCents": -310000,
+            "direction": "CREDIT",
+            "merchant": "TechWorks Inc PAYROLL 006",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "inc-07",
+            "transactionDate": "2024-03-29",
+            "amountCents": -310000,
+            "direction": "CREDIT",
+            "merchant": "TechWorks Inc PAYROLL 007",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "inc-08",
+            "transactionDate": "2024-04-12",
+            "amountCents": -310000,
+            "direction": "CREDIT",
+            "merchant": "TechWorks Inc PAYROLL 008",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "inc-09",
+            "transactionDate": "2024-04-26",
+            "amountCents": -310000,
+            "direction": "CREDIT",
+            "merchant": "TechWorks Inc PAYROLL 009",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "inc-10",
+            "transactionDate": "2024-05-10",
+            "amountCents": -310000,
+            "direction": "CREDIT",
+            "merchant": "TechWorks Inc PAYROLL 010",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "inc-11",
+            "transactionDate": "2024-05-24",
+            "amountCents": -310000,
+            "direction": "CREDIT",
+            "merchant": "TechWorks Inc PAYROLL 011",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "inc-12",
+            "transactionDate": "2024-06-07",
+            "amountCents": -310000,
+            "direction": "CREDIT",
+            "merchant": "TechWorks Inc PAYROLL 012",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "rnt-01",
+            "transactionDate": "2024-01-02",
+            "amountCents": 195000,
+            "direction": "DEBIT",
+            "merchant": "Parkside Properties LLC",
+            "category": "HOUSING",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "rnt-02",
+            "transactionDate": "2024-02-01",
+            "amountCents": 195000,
+            "direction": "DEBIT",
+            "merchant": "Parkside Properties LLC",
+            "category": "HOUSING",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "rnt-03",
+            "transactionDate": "2024-03-01",
+            "amountCents": 195000,
+            "direction": "DEBIT",
+            "merchant": "Parkside Properties LLC",
+            "category": "HOUSING",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "rnt-04",
+            "transactionDate": "2024-04-01",
+            "amountCents": 195000,
+            "direction": "DEBIT",
+            "merchant": "Parkside Properties LLC",
+            "category": "HOUSING",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "rnt-05",
+            "transactionDate": "2024-05-01",
+            "amountCents": 195000,
+            "direction": "DEBIT",
+            "merchant": "Parkside Properties LLC",
+            "category": "HOUSING",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "rnt-06",
+            "transactionDate": "2024-06-03",
+            "amountCents": 195000,
+            "direction": "DEBIT",
+            "merchant": "Parkside Properties LLC",
+            "category": "HOUSING",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "elc-01",
+            "transactionDate": "2024-01-15",
+            "amountCents": 14200,
+            "direction": "DEBIT",
+            "merchant": "Metro Electric Co",
+            "category": "UTILITIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "elc-02",
+            "transactionDate": "2024-02-14",
+            "amountCents": 13800,
+            "direction": "DEBIT",
+            "merchant": "Metro Electric Co",
+            "category": "UTILITIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "elc-03",
+            "transactionDate": "2024-03-15",
+            "amountCents": 11200,
+            "direction": "DEBIT",
+            "merchant": "Metro Electric Co",
+            "category": "UTILITIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "elc-04",
+            "transactionDate": "2024-04-15",
+            "amountCents": 9800,
+            "direction": "DEBIT",
+            "merchant": "Metro Electric Co",
+            "category": "UTILITIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "elc-05",
+            "transactionDate": "2024-05-15",
+            "amountCents": 10400,
+            "direction": "DEBIT",
+            "merchant": "Metro Electric Co",
+            "category": "UTILITIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "isp-01",
+            "transactionDate": "2024-01-08",
+            "amountCents": 7999,
+            "direction": "DEBIT",
+            "merchant": "FastFiber Internet",
+            "category": "UTILITIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "isp-02",
+            "transactionDate": "2024-02-08",
+            "amountCents": 7999,
+            "direction": "DEBIT",
+            "merchant": "FastFiber Internet",
+            "category": "UTILITIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "isp-03",
+            "transactionDate": "2024-03-08",
+            "amountCents": 7999,
+            "direction": "DEBIT",
+            "merchant": "FastFiber Internet",
+            "category": "UTILITIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "isp-04",
+            "transactionDate": "2024-04-08",
+            "amountCents": 7999,
+            "direction": "DEBIT",
+            "merchant": "FastFiber Internet",
+            "category": "UTILITIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "isp-05",
+            "transactionDate": "2024-05-08",
+            "amountCents": 7999,
+            "direction": "DEBIT",
+            "merchant": "FastFiber Internet",
+            "category": "UTILITIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "isp-06",
+            "transactionDate": "2024-06-08",
+            "amountCents": 7999,
+            "direction": "DEBIT",
+            "merchant": "FastFiber Internet",
+            "category": "UTILITIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "car-01",
+            "transactionDate": "2024-01-20",
+            "amountCents": 47500,
+            "direction": "DEBIT",
+            "merchant": "AutoLoans Financial",
+            "category": "DEBT_PAYMENT",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "car-02",
+            "transactionDate": "2024-02-20",
+            "amountCents": 47500,
+            "direction": "DEBIT",
+            "merchant": "AutoLoans Financial",
+            "category": "DEBT_PAYMENT",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "car-03",
+            "transactionDate": "2024-03-20",
+            "amountCents": 47500,
+            "direction": "DEBIT",
+            "merchant": "AutoLoans Financial",
+            "category": "DEBT_PAYMENT",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "car-04",
+            "transactionDate": "2024-04-20",
+            "amountCents": 47500,
+            "direction": "DEBIT",
+            "merchant": "AutoLoans Financial",
+            "category": "DEBT_PAYMENT",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "car-05",
+            "transactionDate": "2024-05-20",
+            "amountCents": 47500,
+            "direction": "DEBIT",
+            "merchant": "AutoLoans Financial",
+            "category": "DEBT_PAYMENT",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "groc-01",
+            "transactionDate": "2024-01-06",
+            "amountCents": 16800,
+            "direction": "DEBIT",
+            "merchant": "Green Leaf Market",
+            "category": "GROCERIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "groc-02",
+            "transactionDate": "2024-01-13",
+            "amountCents": 15200,
+            "direction": "DEBIT",
+            "merchant": "Green Leaf Market",
+            "category": "GROCERIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "groc-03",
+            "transactionDate": "2024-01-20",
+            "amountCents": 17400,
+            "direction": "DEBIT",
+            "merchant": "Green Leaf Market",
+            "category": "GROCERIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "groc-04",
+            "transactionDate": "2024-01-27",
+            "amountCents": 14900,
+            "direction": "DEBIT",
+            "merchant": "Green Leaf Market",
+            "category": "GROCERIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "groc-05",
+            "transactionDate": "2024-02-03",
+            "amountCents": 16200,
+            "direction": "DEBIT",
+            "merchant": "Green Leaf Market",
+            "category": "GROCERIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "groc-06",
+            "transactionDate": "2024-02-10",
+            "amountCents": 18100,
+            "direction": "DEBIT",
+            "merchant": "Green Leaf Market",
+            "category": "GROCERIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "groc-07",
+            "transactionDate": "2024-02-17",
+            "amountCents": 15700,
+            "direction": "DEBIT",
+            "merchant": "Green Leaf Market",
+            "category": "GROCERIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "groc-08",
+            "transactionDate": "2024-02-24",
+            "amountCents": 16500,
+            "direction": "DEBIT",
+            "merchant": "Green Leaf Market",
+            "category": "GROCERIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "groc-09",
+            "transactionDate": "2024-03-02",
+            "amountCents": 17200,
+            "direction": "DEBIT",
+            "merchant": "Green Leaf Market",
+            "category": "GROCERIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "groc-10",
+            "transactionDate": "2024-03-09",
+            "amountCents": 15800,
+            "direction": "DEBIT",
+            "merchant": "Green Leaf Market",
+            "category": "GROCERIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "groc-11",
+            "transactionDate": "2024-03-16",
+            "amountCents": 16000,
+            "direction": "DEBIT",
+            "merchant": "Green Leaf Market",
+            "category": "GROCERIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "groc-12",
+            "transactionDate": "2024-03-23",
+            "amountCents": 16900,
+            "direction": "DEBIT",
+            "merchant": "Green Leaf Market",
+            "category": "GROCERIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "groc-13",
+            "transactionDate": "2024-03-30",
+            "amountCents": 15500,
+            "direction": "DEBIT",
+            "merchant": "Green Leaf Market",
+            "category": "GROCERIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "groc-14",
+            "transactionDate": "2024-04-06",
+            "amountCents": 17800,
+            "direction": "DEBIT",
+            "merchant": "Green Leaf Market",
+            "category": "GROCERIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "groc-15",
+            "transactionDate": "2024-04-13",
+            "amountCents": 16300,
+            "direction": "DEBIT",
+            "merchant": "Green Leaf Market",
+            "category": "GROCERIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "groc-16",
+            "transactionDate": "2024-04-20",
+            "amountCents": 15100,
+            "direction": "DEBIT",
+            "merchant": "Green Leaf Market",
+            "category": "GROCERIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "groc-17",
+            "transactionDate": "2024-04-27",
+            "amountCents": 18200,
+            "direction": "DEBIT",
+            "merchant": "Green Leaf Market",
+            "category": "GROCERIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "groc-18",
+            "transactionDate": "2024-05-04",
+            "amountCents": 16700,
+            "direction": "DEBIT",
+            "merchant": "Green Leaf Market",
+            "category": "GROCERIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "groc-19",
+            "transactionDate": "2024-05-11",
+            "amountCents": 15900,
+            "direction": "DEBIT",
+            "merchant": "Green Leaf Market",
+            "category": "GROCERIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "groc-20",
+            "transactionDate": "2024-05-18",
+            "amountCents": 17100,
+            "direction": "DEBIT",
+            "merchant": "Green Leaf Market",
+            "category": "GROCERIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "groc-21",
+            "transactionDate": "2024-05-25",
+            "amountCents": 16400,
+            "direction": "DEBIT",
+            "merchant": "Green Leaf Market",
+            "category": "GROCERIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "groc-22",
+            "transactionDate": "2024-06-01",
+            "amountCents": 17600,
+            "direction": "DEBIT",
+            "merchant": "Green Leaf Market",
+            "category": "GROCERIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "groc-23",
+            "transactionDate": "2024-06-08",
+            "amountCents": 15600,
+            "direction": "DEBIT",
+            "merchant": "Green Leaf Market",
+            "category": "GROCERIES",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "ins-01",
+            "transactionDate": "2024-01-10",
+            "amountCents": 38000,
+            "direction": "DEBIT",
+            "merchant": "SafeDrive Auto Insurance",
+            "category": "INSURANCE",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "ins-02",
+            "transactionDate": "2024-04-10",
+            "amountCents": 38000,
+            "direction": "DEBIT",
+            "merchant": "SafeDrive Auto Insurance",
+            "category": "INSURANCE",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "one-01",
+            "transactionDate": "2024-02-28",
+            "amountCents": 89900,
+            "direction": "DEBIT",
+            "merchant": "BestBuy Electronics #1042",
+            "category": null,
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "one-02",
+            "transactionDate": "2024-05-17",
+            "amountCents": 12500,
+            "direction": "DEBIT",
+            "merchant": "Riverside Plumbing",
+            "category": null,
+            "accountId": "acct-chk"
+        }
+    ],
+    "expectedPatterns": [
+        {
+            "normalizedMerchant": "techworks payroll",
+            "direction": "CREDIT",
+            "frequency": "BIWEEKLY",
+            "minConfidence": 0.80,
+            "occurrenceCount": 12,
+            "comment": "Noisy reference IDs (001–012) must be stripped during normalisation"
+        },
+        {
+            "normalizedMerchant": "parkside properties",
+            "direction": "DEBIT",
+            "frequency": "MONTHLY",
+            "minConfidence": 0.75,
+            "occurrenceCount": 6
+        },
+        {
+            "normalizedMerchant": "metro electric",
+            "direction": "DEBIT",
+            "frequency": "MONTHLY",
+            "minConfidence": 0.50,
+            "occurrenceCount": 5,
+            "comment": "Variable amounts — confidence lower but should still be detected"
+        },
+        {
+            "normalizedMerchant": "fastfiber internet",
+            "direction": "DEBIT",
+            "frequency": "MONTHLY",
+            "minConfidence": 0.75,
+            "occurrenceCount": 6
+        },
+        {
+            "normalizedMerchant": "autoloans financial",
+            "direction": "DEBIT",
+            "frequency": "MONTHLY",
+            "minConfidence": 0.75,
+            "occurrenceCount": 5
+        },
+        {
+            "normalizedMerchant": "green leaf market",
+            "direction": "DEBIT",
+            "frequency": "WEEKLY",
+            "minConfidence": 0.50,
+            "occurrenceCount": 23
+        }
+    ],
+    "absentMerchants": [
+        "BestBuy Electronics",
+        "Riverside Plumbing"
+    ]
+}

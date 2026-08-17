@@ -3,7 +3,7 @@
  * Domain service for Household, HouseholdMember, and Account operations
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TransactionPostingService = exports.ReviewQueueService = exports.checkIdempotency = exports.reconcileBatch = exports.reconcileTransaction = exports.createNormalizedTransaction = exports.normalizeBatch = exports.normalizeTransaction = exports.parseStatement = exports.createStatementParserRegistry = exports.StatementParserRegistry = exports.ImageStatementParser = exports.PdfStatementParser = exports.CsvStatementParser = exports.VALID_STATUS_TRANSITIONS = exports.createUserFacingError = exports.isValidStatusTransition = exports.validateFileContent = exports.validateDocumentUpload = exports.generateObjectStorageKey = exports.calculateFileChecksum = exports.createFinancialSnapshotCalculator = exports.FinancialSnapshotCalculator = exports.HouseholdService = void 0;
+exports.SNAPSHOT_HISTORY_VERSION = exports.buildSurplusExplanationText = exports.buildSnapshotHistory = exports.buildSnapshotExplanation = exports.createHealthEngine = exports.HEALTH_ENGINE_VERSION = exports.HealthEngine = exports.createDebtIntelligenceService = exports.DEBT_INTELLIGENCE_VERSION = exports.DebtIntelligenceService = exports.createSavingsGoalService = exports.SAVINGS_GOAL_CALCULATION_VERSION = exports.SavingsGoalService = exports.createCashFlowService = exports.ESSENTIAL_CATEGORIES = exports.CASHFLOW_CALCULATION_VERSION = exports.CashFlowService = exports.createRecurringDetector = exports.RECURRING_CALCULATION_VERSION = exports.RecurringDetector = exports.createBudgetService = exports.BUDGET_CALCULATION_VERSION = exports.BudgetService = exports.TransactionPostingService = exports.ReviewQueueService = exports.checkIdempotency = exports.reconcileBatch = exports.reconcileTransaction = exports.createNormalizedTransaction = exports.normalizeBatch = exports.normalizeTransaction = exports.parseStatement = exports.createStatementParserRegistry = exports.StatementParserRegistry = exports.ImageStatementParser = exports.PdfStatementParser = exports.CsvStatementParser = exports.VALID_STATUS_TRANSITIONS = exports.createUserFacingError = exports.isValidStatusTransition = exports.validateFileContent = exports.validateDocumentUpload = exports.generateObjectStorageKey = exports.calculateFileChecksum = exports.createFinancialSnapshotCalculator = exports.FinancialSnapshotCalculator = exports.HouseholdService = void 0;
 exports.createHouseholdService = createHouseholdService;
 const contracts_1 = require("@house-fin/contracts");
 /**
@@ -112,4 +112,40 @@ Object.defineProperty(exports, "ReviewQueueService", { enumerable: true, get: fu
 // Export Transaction Posting
 var posting_service_1 = require("./posting-service");
 Object.defineProperty(exports, "TransactionPostingService", { enumerable: true, get: function () { return posting_service_1.TransactionPostingService; } });
+// Export Budget Service
+var budget_service_1 = require("./budget-service");
+Object.defineProperty(exports, "BudgetService", { enumerable: true, get: function () { return budget_service_1.BudgetService; } });
+Object.defineProperty(exports, "BUDGET_CALCULATION_VERSION", { enumerable: true, get: function () { return budget_service_1.BUDGET_CALCULATION_VERSION; } });
+Object.defineProperty(exports, "createBudgetService", { enumerable: true, get: function () { return budget_service_1.createBudgetService; } });
+// Export Recurring Detector
+var recurring_detector_1 = require("./recurring-detector");
+Object.defineProperty(exports, "RecurringDetector", { enumerable: true, get: function () { return recurring_detector_1.RecurringDetector; } });
+Object.defineProperty(exports, "RECURRING_CALCULATION_VERSION", { enumerable: true, get: function () { return recurring_detector_1.RECURRING_CALCULATION_VERSION; } });
+Object.defineProperty(exports, "createRecurringDetector", { enumerable: true, get: function () { return recurring_detector_1.createRecurringDetector; } });
+// Export Cash Flow Service
+var cash_flow_service_1 = require("./cash-flow-service");
+Object.defineProperty(exports, "CashFlowService", { enumerable: true, get: function () { return cash_flow_service_1.CashFlowService; } });
+Object.defineProperty(exports, "CASHFLOW_CALCULATION_VERSION", { enumerable: true, get: function () { return cash_flow_service_1.CASHFLOW_CALCULATION_VERSION; } });
+Object.defineProperty(exports, "ESSENTIAL_CATEGORIES", { enumerable: true, get: function () { return cash_flow_service_1.ESSENTIAL_CATEGORIES; } });
+Object.defineProperty(exports, "createCashFlowService", { enumerable: true, get: function () { return cash_flow_service_1.createCashFlowService; } });
+// Export Savings Goal Service
+var savings_goal_service_1 = require("./savings-goal-service");
+Object.defineProperty(exports, "SavingsGoalService", { enumerable: true, get: function () { return savings_goal_service_1.SavingsGoalService; } });
+Object.defineProperty(exports, "SAVINGS_GOAL_CALCULATION_VERSION", { enumerable: true, get: function () { return savings_goal_service_1.SAVINGS_GOAL_CALCULATION_VERSION; } });
+Object.defineProperty(exports, "createSavingsGoalService", { enumerable: true, get: function () { return savings_goal_service_1.createSavingsGoalService; } });
+var debt_intelligence_service_1 = require("./debt-intelligence-service");
+Object.defineProperty(exports, "DebtIntelligenceService", { enumerable: true, get: function () { return debt_intelligence_service_1.DebtIntelligenceService; } });
+Object.defineProperty(exports, "DEBT_INTELLIGENCE_VERSION", { enumerable: true, get: function () { return debt_intelligence_service_1.DEBT_INTELLIGENCE_VERSION; } });
+Object.defineProperty(exports, "createDebtIntelligenceService", { enumerable: true, get: function () { return debt_intelligence_service_1.createDebtIntelligenceService; } });
+// ── Slice 3: Health & Attention Engine ───────────────────────────────────────
+var health_engine_1 = require("./health-engine");
+Object.defineProperty(exports, "HealthEngine", { enumerable: true, get: function () { return health_engine_1.HealthEngine; } });
+Object.defineProperty(exports, "HEALTH_ENGINE_VERSION", { enumerable: true, get: function () { return health_engine_1.HEALTH_ENGINE_VERSION; } });
+Object.defineProperty(exports, "createHealthEngine", { enumerable: true, get: function () { return health_engine_1.createHealthEngine; } });
+// ── Slice 3: Snapshot History & Explainability ────────────────────────────────
+var snapshot_history_1 = require("./snapshot-history");
+Object.defineProperty(exports, "buildSnapshotExplanation", { enumerable: true, get: function () { return snapshot_history_1.buildSnapshotExplanation; } });
+Object.defineProperty(exports, "buildSnapshotHistory", { enumerable: true, get: function () { return snapshot_history_1.buildSnapshotHistory; } });
+Object.defineProperty(exports, "buildSurplusExplanationText", { enumerable: true, get: function () { return snapshot_history_1.buildSurplusExplanationText; } });
+Object.defineProperty(exports, "SNAPSHOT_HISTORY_VERSION", { enumerable: true, get: function () { return snapshot_history_1.SNAPSHOT_HISTORY_VERSION; } });
 //# sourceMappingURL=index.js.map

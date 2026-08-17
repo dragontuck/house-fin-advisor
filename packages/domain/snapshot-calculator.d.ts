@@ -90,7 +90,7 @@ export declare class FinancialSnapshotCalculator {
      * Health Status Rules:
      * - AT_RISK: Monthly deficit OR negative net worth with insufficient cash reserves
      * - HEALTHY: Positive net worth AND positive monthly surplus AND reasonable debt-to-income
-     * - ATTENTION: Everything else
+     * - WATCH: Everything else
      *
      * @param metrics - Calculated metrics
      * @returns FinancialHealthStatus

@@ -12,7 +12,7 @@
  * - Monthly essential expenses: $6,800
  * - Monthly discretionary expenses: $1,200
  * - Monthly surplus: $4,000
- * - Health status: HEALTHY or ATTENTION
+ * - Health status: HEALTHY or WATCH
  */
 
 import {

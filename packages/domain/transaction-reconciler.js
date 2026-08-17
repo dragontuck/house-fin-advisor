@@ -17,15 +17,12 @@
  * Preserves both observations when sources disagree.
  * Ensures idempotency - reprocessing same statement produces same result.
  */
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.reconcileTransaction = reconcileTransaction;
 exports.reconcileBatch = reconcileBatch;
 exports.checkIdempotency = checkIdempotency;
 const contracts_1 = require("@house-fin/contracts");
-const crypto_1 = __importDefault(require("crypto"));
+const crypto_1 = require("crypto");
 /**
  * Reconcile a single normalized transaction against existing ones
  */

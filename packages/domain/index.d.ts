@@ -38,6 +38,8 @@ export interface FinancialSnapshotRepository {
     findLatestByHouseholdId(householdId: EntityId): Promise<FinancialSnapshot | null>;
     findByHouseholdAndDate(householdId: EntityId, date: Date): Promise<FinancialSnapshot | null>;
     findAll(): Promise<FinancialSnapshot[]>;
+    /** Returns snapshots on or after `since`, ascending by as_of. */
+    findByHouseholdIdSince(householdId: EntityId, since: Date): Promise<FinancialSnapshot[]>;
 }
 /**
  * HouseholdSettingsRepository interface
@@ -112,4 +114,68 @@ export { normalizeTransaction, normalizeBatch, createNormalizedTransaction, } fr
 export { ReconciliationContext, ExistingTransaction, reconcileTransaction, reconcileBatch, checkIdempotency, } from "./transaction-reconciler";
 export { ReviewQueueService, IReviewRepository, CreateReviewItemInput, ResolveReviewItemInput, } from "./review-queue";
 export { TransactionPostingService, IPostingRepository, IFinancialDocumentRepository, IReconciliationRepository, IFinancialSnapshotCalculator, IReviewQueueService, PostingConfig, PostingContext, } from "./posting-service";
+export { BudgetService, BudgetTransaction, CalculateBudgetInput, BUDGET_CALCULATION_VERSION, createBudgetService, } from "./budget-service";
+export { RecurringDetector, CashFlowTransaction, RECURRING_CALCULATION_VERSION, createRecurringDetector, } from "./recurring-detector";
+export { CashFlowService, CashFlowProjectionInput, HistoryCashFlowInput, ForecastInput, CASHFLOW_CALCULATION_VERSION, ESSENTIAL_CATEGORIES, createCashFlowService, } from "./cash-flow-service";
+import { Budget, EntityId as EId } from "@house-fin/contracts";
+import { BudgetTransaction as BT } from "./budget-service";
+export interface IBudgetRepository {
+    create(budget: Omit<Budget, "id" | "createdAt" | "updatedAt" | "version">): Promise<Budget>;
+    findById(id: EId): Promise<Budget | null>;
+    findByHouseholdAndPeriod(householdId: EId, year: number, month: number): Promise<Budget[]>;
+    findByCategory(householdId: EId, year: number, month: number, category: string): Promise<Budget | null>;
+    update(id: EId, updates: {
+        amountCents?: number;
+        notes?: string;
+    }, expectedVersion: number): Promise<Budget>;
+    delete(id: EId, householdId: EId): Promise<void>;
+    /** Returns posted transactions for the household that fall within the given period (inclusive). */
+    getTransactionsForPeriod(householdId: EId, year: number, month: number): Promise<BT[]>;
+    /** Assigns a category to a posted transaction. Empty string clears the category. */
+    categorizeTransaction(transactionId: string, householdId: EId, category: string): Promise<void>;
+}
+import { CashFlowTransaction as CFT } from "./recurring-detector";
+export interface ICashFlowRepository {
+    /** All posted transactions between fromDate (inclusive) and toDate (exclusive). */
+    getTransactionsForRange(householdId: EId, fromDate: Date, toDate: Date): Promise<CFT[]>;
+    /** Sum of CHECKING + SAVINGS account balances. */
+    getLiquidCashCents(householdId: EId): Promise<number>;
+    getHouseholdSettings(householdId: EId): Promise<HouseholdSettings | null>;
+    getBudgetsForPeriod(householdId: EId, year: number, month: number): Promise<Budget[]>;
+}
+export { SavingsGoalService, CalculateGoalInput, AnalyzeEmergencyFundInput, SAVINGS_GOAL_CALCULATION_VERSION, createSavingsGoalService, } from "./savings-goal-service";
+import { SavingsGoal as SG } from "@house-fin/contracts";
+export interface ISavingsGoalRepository {
+    create(goal: Omit<SG, "id" | "createdAt" | "updatedAt" | "version">): Promise<SG>;
+    findById(id: EId): Promise<SG | null>;
+    findByHouseholdId(householdId: EId): Promise<SG[]>;
+    /** Returns null when no EMERGENCY_FUND goal exists for the household. */
+    findEmergencyFundGoal(householdId: EId): Promise<SG | null>;
+    update(id: EId, updates: {
+        name?: string;
+        targetAmountCents?: number;
+        currentAmountCents?: number;
+        monthlyContributionCents?: number;
+        targetDate?: Date | null;
+        notes?: string | null;
+    }, expectedVersion: number): Promise<SG>;
+    delete(id: EId, householdId: EId): Promise<void>;
+}
+import { Account as Acct } from "@house-fin/contracts";
+export { DebtIntelligenceService, AnalyzeDebtInput, DEBT_INTELLIGENCE_VERSION, createDebtIntelligenceService, } from "./debt-intelligence-service";
+export interface IDebtRepository {
+    /** All ACTIVE accounts for the household. */
+    findActiveAccountsByHousehold(householdId: EId): Promise<Acct[]>;
+    /** Update debt-specific columns for a single account. */
+    updateDebtDetails(accountId: EId, householdId: EId, details: {
+        creditLimitCents?: number | null;
+        interestRateBps?: number | null;
+        minimumPaymentCents?: number | null;
+        scheduledPaymentCents?: number | null;
+        statementBalanceCents?: number | null;
+        revolvingBalanceCents?: number | null;
+    }): Promise<Acct>;
+}
+export { HealthEngine, HealthEngineInput, OverBudgetEntry, GoalSummary, RecurringChangeEntry, HEALTH_ENGINE_VERSION, createHealthEngine, } from "./health-engine";
+export { buildSnapshotExplanation, buildSnapshotHistory, buildSurplusExplanationText, SNAPSHOT_HISTORY_VERSION, } from "./snapshot-history";
 //# sourceMappingURL=index.d.ts.map

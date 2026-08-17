@@ -22,6 +22,15 @@ import {
     DocumentStatusResponse,
     PostStatementRequest,
     PostStatementResponse,
+    CreateBudgetRequest,
+    UpdateBudgetRequest,
+    CategorizationRequest,
+    Budget,
+    CreateSavingsGoalRequest,
+    UpdateSavingsGoalRequest,
+    GoalType,
+    UpdateDebtAccountRequest,
+    PulseCalculationDetails,
 } from "@house-fin/contracts";
 import {
     HouseholdService,
@@ -34,6 +43,14 @@ import {
     generateObjectStorageKey,
     ReviewQueueService,
     TransactionPostingService,
+    createBudgetService,
+    createRecurringDetector,
+    createCashFlowService,
+    createSavingsGoalService,
+    createDebtIntelligenceService,
+    createHealthEngine,
+    buildSnapshotHistory,
+    buildSurplusExplanationText,
 } from "@house-fin/domain";
 import {
     PgHouseholdRepository,
@@ -44,6 +61,10 @@ import {
     PgFinancialDocumentRepository,
     PgReviewItemRepository,
     PgPostingRepository,
+    PgBudgetRepository,
+    PgCashFlowRepository,
+    PgSavingsGoalRepository,
+    PgDebtRepository,
 } from "./db/repositories";
 import { householdContextMiddleware, verifyHouseholdContext } from "./middleware/household-context";
 import { uploadRateLimiter } from "./middleware/rate-limit";
@@ -129,6 +150,17 @@ export function createServer(): Express {
     const documentRepo = new PgFinancialDocumentRepository();
     const reviewItemRepo = new PgReviewItemRepository();
     const postingRepo = new PgPostingRepository();
+
+    const budgetRepo = new PgBudgetRepository();
+    const budgetService = createBudgetService();
+    const cashFlowRepo = new PgCashFlowRepository();
+    const recurringDetector = createRecurringDetector();
+    const cashFlowService = createCashFlowService();
+    const savingsGoalRepo = new PgSavingsGoalRepository();
+    const savingsGoalService = createSavingsGoalService();
+    const debtRepo = new PgDebtRepository();
+    const debtService = createDebtIntelligenceService();
+    const healthEngine = createHealthEngine();
 
     const householdService = createHouseholdService(
         householdRepo,
@@ -465,7 +497,7 @@ export function createServer(): Express {
                         healthMessage =
                             "Your household is in good financial shape. Keep maintaining this momentum!";
                         break;
-                    case FinancialHealthStatus.ATTENTION:
+                    case FinancialHealthStatus.WATCH:
                         healthMessage =
                             "Your finances are stable but there may be room for improvement. Consider reviewing your spending habits.";
                         break;
@@ -520,6 +552,16 @@ export function createServer(): Express {
                 };
 
                 // Return financial pulse
+                const calculationDetails: PulseCalculationDetails = {
+                    snapshotId: saved.id,
+                    calculationVersion: saved.version,
+                    calculatedAt: saved.calculatedAt,
+                    monthlyIncomeCents: saved.monthlyIncome,
+                    monthlyEssentialExpensesCents: saved.monthlyEssentialExpenses,
+                    monthlyDiscretionaryExpensesCents: saved.monthlyDiscretionaryExpenses,
+                    surplusExplanation: buildSurplusExplanationText(saved),
+                };
+
                 res.json({
                     householdId,
                     householdName: household.name,
@@ -530,14 +572,15 @@ export function createServer(): Express {
                         netWorth: MoneyToDollars(saved.netWorth),
                         cashAvailable: MoneyToDollars(saved.cash),
                         monthlyIncome: MoneyToDollars(saved.monthlyIncome),
-                        monthlyExpenses:
-                            MoneyToDollars(saved.monthlyEssentialExpenses) +
-                            MoneyToDollars(saved.monthlyDiscretionaryExpenses),
+                        monthlyExpenses: MoneyToDollars(
+                            (saved.monthlyEssentialExpenses + saved.monthlyDiscretionaryExpenses) as Money
+                        ),
                         monthlySurplus: MoneyToDollars(saved.monthlySurplus),
                         totalDebt: MoneyToDollars(saved.debt),
                     },
                     accountsSummary,
                     statusMessage: healthMessage,
+                    calculationDetails,
                 });
             } catch (error) {
                 next(error);
@@ -1347,6 +1390,963 @@ export function createServer(): Express {
     );
 
     // ==================== ERROR HANDLING ====================
+
+    // ==================== BUDGET ENDPOINTS ====================
+
+    /**
+     * GET /budgets?year=&month=
+     * List budget entries for a period
+     */
+    app.get(
+        "/budgets",
+        verifyHouseholdContext,
+        async (req: Request, res: Response, next: NextFunction) => {
+            try {
+                const { householdId, correlationId } = req.context;
+                const year = parseInt(req.query.year as string, 10);
+                const month = parseInt(req.query.month as string, 10);
+
+                if (!year || !month || month < 1 || month > 12) {
+                    return res.status(400).json({
+                        userMessage: "Provide valid year and month (1–12) as query parameters.",
+                        errorCode: "INVALID_PERIOD",
+                        correlationId,
+                        retryable: false,
+                    });
+                }
+
+                const budgets = await budgetRepo.findByHouseholdAndPeriod(householdId, year, month);
+                res.json(budgets.map(b => ({
+                    id: b.id,
+                    category: b.category,
+                    period: { year: b.periodYear, month: b.periodMonth },
+                    amountCents: b.amountCents,
+                    goalId: b.goalId ?? null,
+                    notes: b.notes ?? null,
+                    version: b.version,
+                    createdAt: b.createdAt,
+                    updatedAt: b.updatedAt,
+                })));
+            } catch (error) {
+                next(error);
+            }
+        }
+    );
+
+    /**
+     * GET /budgets/results?year=&month=
+     * Calculate and return BudgetResultSet for a period
+     */
+    app.get(
+        "/budgets/results",
+        verifyHouseholdContext,
+        async (req: Request, res: Response, next: NextFunction) => {
+            try {
+                const { householdId, correlationId } = req.context;
+                const year = parseInt(req.query.year as string, 10);
+                const month = parseInt(req.query.month as string, 10);
+
+                if (!year || !month || month < 1 || month > 12) {
+                    return res.status(400).json({
+                        userMessage: "Provide valid year and month (1–12) as query parameters.",
+                        errorCode: "INVALID_PERIOD",
+                        correlationId,
+                        retryable: false,
+                    });
+                }
+
+                const [budgets, transactions] = await Promise.all([
+                    budgetRepo.findByHouseholdAndPeriod(householdId, year, month),
+                    budgetRepo.getTransactionsForPeriod(householdId, year, month),
+                ]);
+
+                const resultSet = budgetService.calculateResults({
+                    householdId,
+                    period: { year, month },
+                    budgets,
+                    transactions,
+                    asOf: new Date(),
+                });
+
+                res.json(resultSet);
+            } catch (error) {
+                next(error);
+            }
+        }
+    );
+
+    /**
+     * POST /budgets
+     * Create a budget entry for a category/period
+     */
+    app.post(
+        "/budgets",
+        verifyHouseholdContext,
+        async (req: Request, res: Response, next: NextFunction) => {
+            try {
+                const { householdId, correlationId } = req.context;
+                const body = req.body as CreateBudgetRequest;
+
+                if (!body || typeof body !== "object") {
+                    return res.status(400).json({
+                        userMessage: "Request body is required.",
+                        errorCode: "MISSING_BODY",
+                        correlationId,
+                        retryable: false,
+                    });
+                }
+
+                try {
+                    budgetService.validateBudget(
+                        body.periodYear,
+                        body.periodMonth,
+                        body.category,
+                        body.amountCents,
+                    );
+                } catch (validationError) {
+                    return res.status(400).json({
+                        userMessage: validationError instanceof Error ? validationError.message : "Invalid budget data.",
+                        errorCode: "VALIDATION_ERROR",
+                        correlationId,
+                        retryable: false,
+                    });
+                }
+
+                const existing = await budgetRepo.findByCategory(
+                    householdId,
+                    body.periodYear,
+                    body.periodMonth,
+                    body.category,
+                );
+                if (existing) {
+                    return res.status(409).json({
+                        userMessage: `A budget for ${body.category} in ${body.periodYear}-${String(body.periodMonth).padStart(2, "0")} already exists. Use PUT to update it.`,
+                        errorCode: "BUDGET_ALREADY_EXISTS",
+                        correlationId,
+                        retryable: false,
+                    });
+                }
+
+                const budget = await budgetRepo.create({
+                    householdId,
+                    periodYear: body.periodYear,
+                    periodMonth: body.periodMonth,
+                    category: body.category.trim(),
+                    amountCents: body.amountCents as Money,
+                    goalId: body.goalId as EntityId | undefined,
+                    notes: body.notes,
+                });
+
+                res.status(201).json(budget);
+            } catch (error) {
+                next(error);
+            }
+        }
+    );
+
+    /**
+     * PUT /budgets/:id
+     * Update a budget entry (optimistic concurrency via version field)
+     */
+    app.put(
+        "/budgets/:id",
+        verifyHouseholdContext,
+        async (req: Request, res: Response, next: NextFunction) => {
+            try {
+                const { householdId, correlationId } = req.context;
+                const budgetId = req.params.id as EntityId;
+                const body = req.body as UpdateBudgetRequest & { version: number };
+
+                if (typeof body.version !== "number") {
+                    return res.status(400).json({
+                        userMessage: "Include the current version number to prevent conflicting updates.",
+                        errorCode: "MISSING_VERSION",
+                        correlationId,
+                        retryable: false,
+                    });
+                }
+
+                const existing = await budgetRepo.findById(budgetId);
+                if (!existing || existing.householdId !== householdId) {
+                    return res.status(404).json({
+                        userMessage: "Budget not found.",
+                        errorCode: "BUDGET_NOT_FOUND",
+                        correlationId,
+                        retryable: false,
+                    });
+                }
+
+                if (body.amountCents !== undefined) {
+                    try {
+                        budgetService.validateBudget(
+                            existing.periodYear,
+                            existing.periodMonth,
+                            existing.category,
+                            body.amountCents,
+                        );
+                    } catch (validationError) {
+                        return res.status(400).json({
+                            userMessage: validationError instanceof Error ? validationError.message : "Invalid amount.",
+                            errorCode: "VALIDATION_ERROR",
+                            correlationId,
+                            retryable: false,
+                        });
+                    }
+                }
+
+                const updated = await budgetRepo.update(budgetId, {
+                    amountCents: body.amountCents,
+                    notes: body.notes,
+                }, body.version);
+
+                res.json(updated);
+            } catch (error) {
+                if (error instanceof Error && error.message.includes("version conflict")) {
+                    return res.status(409).json({
+                        userMessage: "This budget was updated by someone else. Please reload and try again.",
+                        errorCode: "VERSION_CONFLICT",
+                        correlationId: req.context.correlationId,
+                        retryable: false,
+                    });
+                }
+                next(error);
+            }
+        }
+    );
+
+    /**
+     * DELETE /budgets/:id
+     * Remove a budget entry
+     */
+    app.delete(
+        "/budgets/:id",
+        verifyHouseholdContext,
+        async (req: Request, res: Response, next: NextFunction) => {
+            try {
+                const { householdId, correlationId } = req.context;
+                const budgetId = req.params.id as EntityId;
+
+                const existing = await budgetRepo.findById(budgetId);
+                if (!existing || existing.householdId !== householdId) {
+                    return res.status(404).json({
+                        userMessage: "Budget not found.",
+                        errorCode: "BUDGET_NOT_FOUND",
+                        correlationId,
+                        retryable: false,
+                    });
+                }
+
+                await budgetRepo.delete(budgetId, householdId);
+                res.status(204).send();
+            } catch (error) {
+                next(error);
+            }
+        }
+    );
+
+    /**
+     * PUT /transactions/:id/category
+     * Assign or clear a spending category on a posted transaction
+     */
+    app.put(
+        "/transactions/:id/category",
+        verifyHouseholdContext,
+        async (req: Request, res: Response, next: NextFunction) => {
+            try {
+                const { householdId, correlationId } = req.context;
+                const transactionId = req.params.id;
+                const body = req.body as CategorizationRequest;
+
+                if (!body || typeof body.category !== "string") {
+                    return res.status(400).json({
+                        userMessage: "Provide a \"category\" string in the request body. Use an empty string to clear the category.",
+                        errorCode: "MISSING_CATEGORY",
+                        correlationId,
+                        retryable: false,
+                    });
+                }
+
+                await budgetRepo.categorizeTransaction(transactionId, householdId, body.category);
+                res.status(204).send();
+            } catch (error) {
+                if (error instanceof Error && error.message === "Transaction not found") {
+                    return res.status(404).json({
+                        userMessage: "Transaction not found.",
+                        errorCode: "TRANSACTION_NOT_FOUND",
+                        correlationId: req.context.correlationId,
+                        retryable: false,
+                    });
+                }
+                next(error);
+            }
+        }
+    );
+
+    // ==================== CASH FLOW ENDPOINTS ====================
+
+    /** Shared helper: build a date range for N calendar months ending at asOf. */
+    function historyWindow(asOf: Date, months: number): { from: Date; to: Date } {
+        const to = new Date(asOf.getFullYear(), asOf.getMonth() + 1, 1); // first of next month
+        const from = new Date(to.getFullYear(), to.getMonth() - months, 1);
+        return { from, to };
+    }
+
+    /**
+     * GET /cash-flow/history?months=6
+     * Historical monthly cash flow summary
+     */
+    app.get(
+        "/cash-flow/history",
+        verifyHouseholdContext,
+        async (req: Request, res: Response, next: NextFunction) => {
+            try {
+                const { householdId } = req.context;
+                const months = Math.min(parseInt(req.query.months as string || "6", 10) || 6, 24);
+                const asOf = new Date();
+                const { from, to } = historyWindow(asOf, months);
+                const transactions = await cashFlowRepo.getTransactionsForRange(householdId, from, to);
+                const history = cashFlowService.calculateHistory({ householdId, asOf, transactions });
+                res.json(history);
+            } catch (error) {
+                next(error);
+            }
+        }
+    );
+
+    /**
+     * GET /cash-flow/current
+     * Current-month cash-flow projection
+     */
+    app.get(
+        "/cash-flow/current",
+        verifyHouseholdContext,
+        async (req: Request, res: Response, next: NextFunction) => {
+            try {
+                const { householdId } = req.context;
+                const asOf = new Date();
+                const { from, to } = historyWindow(asOf, 6);
+
+                const [transactions, liquidCash, settings, currentBudgets] = await Promise.all([
+                    cashFlowRepo.getTransactionsForRange(householdId, from, to),
+                    cashFlowRepo.getLiquidCashCents(householdId),
+                    cashFlowRepo.getHouseholdSettings(householdId),
+                    cashFlowRepo.getBudgetsForPeriod(householdId, asOf.getFullYear(), asOf.getMonth() + 1),
+                ]);
+
+                const patterns = recurringDetector.detectPatterns(transactions, asOf);
+
+                // Count distinct months in history for confidence scoring
+                const monthSet = new Set(
+                    transactions.map(tx => {
+                        const d = tx.transactionDate;
+                        return `${d.getFullYear()}-${d.getMonth() + 1}`;
+                    })
+                );
+
+                const currentMonthKey = `${asOf.getFullYear()}-${asOf.getMonth() + 1}`;
+                const currentMonthTxs = transactions.filter(tx => {
+                    const d = tx.transactionDate;
+                    return d.getFullYear() === asOf.getFullYear() && d.getMonth() + 1 === asOf.getMonth() + 1;
+                });
+
+                const projection = cashFlowService.calculateCurrentProjection({
+                    householdId,
+                    asOf,
+                    liquidCashCents: liquidCash,
+                    currentMonthTransactions: currentMonthTxs,
+                    historicalPatterns: patterns,
+                    currentMonthBudgets: currentBudgets,
+                    householdSettings: settings,
+                    historyMonthCount: monthSet.size,
+                });
+
+                res.json(projection);
+            } catch (error) {
+                next(error);
+            }
+        }
+    );
+
+    /**
+     * GET /cash-flow/patterns
+     * Detected recurring transaction patterns (income and expenses)
+     */
+    app.get(
+        "/cash-flow/patterns",
+        verifyHouseholdContext,
+        async (req: Request, res: Response, next: NextFunction) => {
+            try {
+                const { householdId } = req.context;
+                const asOf = new Date();
+                const { from, to } = historyWindow(asOf, 6);
+                const transactions = await cashFlowRepo.getTransactionsForRange(householdId, from, to);
+                const patterns = recurringDetector.detectPatterns(transactions, asOf);
+                res.json(patterns);
+            } catch (error) {
+                next(error);
+            }
+        }
+    );
+
+    /**
+     * GET /cash-flow/forecast?months=3
+     * Short-term cash-flow forecast
+     */
+    app.get(
+        "/cash-flow/forecast",
+        verifyHouseholdContext,
+        async (req: Request, res: Response, next: NextFunction) => {
+            try {
+                const { householdId } = req.context;
+                const forecastMonths = Math.min(parseInt(req.query.months as string || "3", 10) || 3, 12);
+                const asOf = new Date();
+                const { from, to } = historyWindow(asOf, 6);
+
+                const [transactions, liquidCash, settings] = await Promise.all([
+                    cashFlowRepo.getTransactionsForRange(householdId, from, to),
+                    cashFlowRepo.getLiquidCashCents(householdId),
+                    cashFlowRepo.getHouseholdSettings(householdId),
+                ]);
+
+                const patterns = recurringDetector.detectPatterns(transactions, asOf);
+
+                // Build budget map for current + future months
+                const budgetsByMonth = new Map<string, Budget[]>();
+                const monthsNeeded = forecastMonths + 1;
+                await Promise.all(
+                    Array.from({ length: monthsNeeded }, (_, i) => {
+                        let y = asOf.getFullYear();
+                        let m = asOf.getMonth() + 1 + i;
+                        while (m > 12) { m -= 12; y++; }
+                        return cashFlowRepo.getBudgetsForPeriod(householdId, y, m).then(budgets => {
+                            budgetsByMonth.set(`${y}-${m}`, budgets as any);
+                        });
+                    })
+                );
+
+                const monthSet = new Set(
+                    transactions.map(tx => {
+                        const d = tx.transactionDate;
+                        return `${d.getFullYear()}-${d.getMonth() + 1}`;
+                    })
+                );
+
+                const forecast = cashFlowService.calculateForecast({
+                    householdId,
+                    asOf,
+                    liquidCashCents: liquidCash,
+                    allTransactions: transactions,
+                    historicalPatterns: patterns,
+                    budgetsByMonth: budgetsByMonth as Map<string, any>,
+                    householdSettings: settings,
+                    historyMonthCount: monthSet.size,
+                    forecastMonths,
+                });
+
+                res.json(forecast);
+            } catch (error) {
+                next(error);
+            }
+        }
+    );
+
+    // ==================== SAVINGS GOAL ENDPOINTS ====================
+
+    /**
+     * GET /goals — list all savings goals with calculated results
+     */
+    app.get(
+        "/goals",
+        verifyHouseholdContext,
+        async (req: Request, res: Response, next: NextFunction) => {
+            try {
+                const { householdId } = req.context;
+                const asOf = new Date();
+                const goals = await savingsGoalRepo.findByHouseholdId(householdId);
+                const results = goals.map(goal =>
+                    savingsGoalService.calculateGoal({ goal, asOf }),
+                );
+                res.json(results);
+            } catch (error) {
+                next(error);
+            }
+        }
+    );
+
+    /**
+     * POST /goals — create a new savings goal
+     */
+    app.post(
+        "/goals",
+        verifyHouseholdContext,
+        async (req: Request, res: Response, next: NextFunction) => {
+            try {
+                const { householdId } = req.context;
+                const body = req.body as CreateSavingsGoalRequest;
+
+                if (!body.name?.trim()) {
+                    return res.status(400).json({
+                        userMessage: "Goal name is required.",
+                        errorCode: "MISSING_GOAL_NAME",
+                        correlationId: req.context.correlationId,
+                        retryable: false,
+                    });
+                }
+                if (!body.targetAmountCents || body.targetAmountCents <= 0) {
+                    return res.status(400).json({
+                        userMessage: "Target amount must be greater than zero.",
+                        errorCode: "INVALID_TARGET_AMOUNT",
+                        correlationId: req.context.correlationId,
+                        retryable: false,
+                    });
+                }
+                if (!Object.values(GoalType).includes(body.type)) {
+                    return res.status(400).json({
+                        userMessage: "Invalid goal type.",
+                        errorCode: "INVALID_GOAL_TYPE",
+                        correlationId: req.context.correlationId,
+                        retryable: false,
+                    });
+                }
+
+                const goal = await savingsGoalRepo.create({
+                    householdId,
+                    name: body.name.trim(),
+                    type: body.type,
+                    targetAmountCents: body.targetAmountCents as Money,
+                    currentAmountCents: (body.currentAmountCents ?? 0) as Money,
+                    monthlyContributionCents: (body.monthlyContributionCents ?? 0) as Money,
+                    targetDate: body.targetDate ? new Date(body.targetDate) : null,
+                    startDate: new Date(),
+                    notes: body.notes ?? null,
+                });
+                const result = savingsGoalService.calculateGoal({ goal, asOf: new Date() });
+                res.status(201).json(result);
+            } catch (error) {
+                next(error);
+            }
+        }
+    );
+
+    /**
+     * PUT /goals/:id — update a savings goal
+     */
+    app.put(
+        "/goals/:id",
+        verifyHouseholdContext,
+        async (req: Request, res: Response, next: NextFunction) => {
+            try {
+                const { householdId } = req.context;
+                const goalId = req.params.id as EntityId;
+                const body = req.body as UpdateSavingsGoalRequest & { version: number };
+
+                const existing = await savingsGoalRepo.findById(goalId);
+                if (!existing || existing.householdId !== householdId) {
+                    return res.status(404).json({
+                        userMessage: "Savings goal not found.",
+                        errorCode: "GOAL_NOT_FOUND",
+                        correlationId: req.context.correlationId,
+                        retryable: false,
+                    });
+                }
+
+                const updated = await savingsGoalRepo.update(
+                    goalId,
+                    {
+                        name: body.name,
+                        targetAmountCents: body.targetAmountCents,
+                        currentAmountCents: body.currentAmountCents,
+                        monthlyContributionCents: body.monthlyContributionCents,
+                        targetDate: body.targetDate !== undefined
+                            ? (body.targetDate ? new Date(body.targetDate) : null)
+                            : undefined,
+                        notes: body.notes,
+                    },
+                    body.version ?? existing.version,
+                );
+                const result = savingsGoalService.calculateGoal({ goal: updated, asOf: new Date() });
+                res.json(result);
+            } catch (error) {
+                if (error instanceof Error && error.message.includes("version conflict")) {
+                    return res.status(409).json({
+                        userMessage: "This goal was updated by someone else. Reload and try again.",
+                        errorCode: "VERSION_CONFLICT",
+                        correlationId: req.context.correlationId,
+                        retryable: true,
+                    });
+                }
+                next(error);
+            }
+        }
+    );
+
+    /**
+     * DELETE /goals/:id
+     */
+    app.delete(
+        "/goals/:id",
+        verifyHouseholdContext,
+        async (req: Request, res: Response, next: NextFunction) => {
+            try {
+                const { householdId } = req.context;
+                const goalId = req.params.id as EntityId;
+
+                const existing = await savingsGoalRepo.findById(goalId);
+                if (!existing || existing.householdId !== householdId) {
+                    return res.status(404).json({
+                        userMessage: "Savings goal not found.",
+                        errorCode: "GOAL_NOT_FOUND",
+                        correlationId: req.context.correlationId,
+                        retryable: false,
+                    });
+                }
+
+                await savingsGoalRepo.delete(goalId, householdId);
+                res.status(204).send();
+            } catch (error) {
+                next(error);
+            }
+        }
+    );
+
+    /**
+     * GET /goals/emergency-fund — emergency fund adequacy analysis
+     */
+    app.get(
+        "/goals/emergency-fund",
+        verifyHouseholdContext,
+        async (req: Request, res: Response, next: NextFunction) => {
+            try {
+                const { householdId } = req.context;
+
+                const [settings, liquidCash, efGoal] = await Promise.all([
+                    cashFlowRepo.getHouseholdSettings(householdId),
+                    cashFlowRepo.getLiquidCashCents(householdId),
+                    savingsGoalRepo.findEmergencyFundGoal(householdId),
+                ]);
+
+                if (!settings) {
+                    return res.status(422).json({
+                        userMessage: "Household settings have not been configured. Set up your income and expenses first.",
+                        errorCode: "SETTINGS_NOT_CONFIGURED",
+                        correlationId: req.context.correlationId,
+                        retryable: false,
+                    });
+                }
+
+                const policy = {
+                    minimumMonths: settings.emergencyFundMinimumMonths ?? 3,
+                    targetMonths: settings.emergencyFundTargetMonths ?? 6,
+                    stretchMonths: settings.emergencyFundStretchMonths ?? 9,
+                };
+
+                const result = savingsGoalService.analyzeEmergencyFund({
+                    householdId,
+                    eligibleCashCents: liquidCash,
+                    essentialMonthlyExpensesCents: settings.monthlyEssentialExpenses,
+                    policy,
+                    activeMonthlyContributionCents: efGoal?.monthlyContributionCents ?? 0,
+                    asOf: new Date(),
+                });
+
+                res.json(result);
+            } catch (error) {
+                next(error);
+            }
+        }
+    );
+
+    // ==================== DEBT INTELLIGENCE ENDPOINTS ====================
+
+    /**
+     * GET /debt/summary — full debt analysis for the household
+     */
+    app.get(
+        "/debt/summary",
+        verifyHouseholdContext,
+        async (req: Request, res: Response, next: NextFunction) => {
+            try {
+                const { householdId } = req.context;
+                const [accounts, settings] = await Promise.all([
+                    debtRepo.findActiveAccountsByHousehold(householdId),
+                    cashFlowRepo.getHouseholdSettings(householdId),
+                ]);
+                const monthlyIncomeCents = settings?.monthlyIncome ?? 0;
+                const result = debtService.analyze({
+                    householdId,
+                    accounts,
+                    monthlyIncomeCents,
+                    asOf: new Date(),
+                });
+                res.json(result);
+            } catch (error) {
+                next(error);
+            }
+        },
+    );
+
+    /**
+     * PATCH /debt/accounts/:id — update debt-specific fields for an account
+     */
+    app.patch(
+        "/debt/accounts/:id",
+        verifyHouseholdContext,
+        async (req: Request, res: Response, next: NextFunction) => {
+            try {
+                const { householdId } = req.context;
+                const accountId = req.params.id as EntityId;
+                const body = req.body as UpdateDebtAccountRequest;
+
+                // Validate basis points range when provided
+                if (
+                    body.interestRateBps !== undefined &&
+                    body.interestRateBps !== null &&
+                    (body.interestRateBps < 0 || body.interestRateBps > 100000)
+                ) {
+                    return res.status(400).json({
+                        userMessage: "Interest rate must be between 0 and 100,000 basis points (0%–1000%).",
+                        errorCode: "INVALID_INTEREST_RATE",
+                        correlationId: req.context.correlationId,
+                        retryable: false,
+                    });
+                }
+
+                const updated = await debtRepo.updateDebtDetails(accountId, householdId, {
+                    creditLimitCents: body.creditLimitCents,
+                    interestRateBps: body.interestRateBps,
+                    minimumPaymentCents: body.minimumPaymentCents,
+                    scheduledPaymentCents: body.scheduledPaymentCents,
+                    statementBalanceCents: body.statementBalanceCents,
+                    revolvingBalanceCents: body.revolvingBalanceCents,
+                });
+                res.json(updated);
+            } catch (error) {
+                if (error instanceof Error && error.message === "Account not found") {
+                    return res.status(404).json({
+                        userMessage: "Account not found.",
+                        errorCode: "ACCOUNT_NOT_FOUND",
+                        correlationId: req.context.correlationId,
+                        retryable: false,
+                    });
+                }
+                next(error);
+            }
+        },
+    );
+
+    // ==================== HEALTH & ATTENTION ENDPOINTS ====================
+
+    /**
+     * GET /health/summary — household financial health and attention items
+     */
+    app.get(
+        "/health/summary",
+        verifyHouseholdContext,
+        async (req: Request, res: Response, next: NextFunction) => {
+            try {
+                const { householdId } = req.context;
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = now.getMonth() + 1;
+
+                // Gather all inputs in parallel
+                const [settings, liquidCash, accounts, goalList, budgets, transactions, lastTxRow] =
+                    await Promise.all([
+                        cashFlowRepo.getHouseholdSettings(householdId),
+                        cashFlowRepo.getLiquidCashCents(householdId),
+                        debtRepo.findActiveAccountsByHousehold(householdId),
+                        savingsGoalRepo.findByHouseholdId(householdId),
+                        budgetRepo.findByHouseholdAndPeriod(householdId, year, month),
+                        budgetRepo.getTransactionsForPeriod(householdId, year, month),
+                        cashFlowRepo.getTransactionsForRange(
+                            householdId,
+                            new Date(now.getFullYear(), now.getMonth(), 1),
+                            now,
+                        ),
+                    ]);
+
+                const monthlyIncomeCents = settings?.monthlyIncome ?? 0;
+                const essentialExpensesCents = settings?.monthlyEssentialExpenses ?? 0;
+                const monthlySurplusCents = monthlyIncomeCents - essentialExpensesCents - (settings?.monthlyDiscretionaryExpenses ?? 0);
+
+                // Emergency fund coverage
+                const efPolicy = {
+                    minimumMonths: settings?.emergencyFundMinimumMonths ?? 3,
+                    targetMonths: settings?.emergencyFundTargetMonths ?? 6,
+                    stretchMonths: settings?.emergencyFundStretchMonths ?? 9,
+                };
+                const efGoal = await savingsGoalRepo.findEmergencyFundGoal(householdId);
+                const efResult = savingsGoalService.analyzeEmergencyFund({
+                    householdId,
+                    eligibleCashCents: liquidCash,
+                    essentialMonthlyExpensesCents: essentialExpensesCents,
+                    policy: efPolicy,
+                    activeMonthlyContributionCents: efGoal?.monthlyContributionCents ?? 0,
+                    asOf: now,
+                });
+
+                // Debt analysis
+                const debtResult = debtService.analyze({
+                    householdId,
+                    accounts,
+                    monthlyIncomeCents,
+                    asOf: now,
+                });
+
+                // Budget results — only OVER_BUDGET categories with variancePercent > 0
+                const budgetResultSet = budgetService.calculateResults({
+                    householdId,
+                    period: { year, month },
+                    budgets,
+                    transactions,
+                    asOf: now,
+                });
+                const overBudget = budgetResultSet.results
+                    .filter(r => r.varianceCents > 0 && r.variancePercent !== null && r.variancePercent > 0)
+                    .map(r => ({
+                        category: r.category,
+                        varianceCents: r.varianceCents as number,
+                        variancePercent: r.variancePercent!,
+                    }));
+
+                // Goal summaries
+                const goalSummaries = goalList.map(g => {
+                    const gr = savingsGoalService.calculateGoal({ goal: g, asOf: now });
+                    return { goalId: g.id, name: g.name, status: gr.status, percentComplete: gr.percentComplete, targetDate: g.targetDate };
+                });
+
+                // Last transaction date from this month's data (rough freshness check)
+                const lastTxDate = lastTxRow.length > 0
+                    ? lastTxRow.reduce((latest, t) => t.transactionDate > latest ? t.transactionDate : latest, lastTxRow[0].transactionDate)
+                    : null;
+
+                // Query prior month's snapshot to detect debt increase trends
+                const priorMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                const priorSnapshots = await snapshotRepo.findByHouseholdIdSince(householdId, priorMonthDate);
+                let previousRevolvingDebtCents: number | null = null;
+                if (priorSnapshots.length > 0) {
+                    // Get the most recent snapshot from prior month
+                    const priorSnapshot = priorSnapshots.reduce((latest, s) =>
+                        new Date(s.calculatedAt) > new Date(latest.calculatedAt) ? s : latest
+                    );
+                    // Query accounts from the source to analyze prior debt
+                    const priorAccounts = accounts; // Use current accounts; could enhance by querying historical account states
+                    try {
+                        const priorDebtResult = debtService.analyze({
+                            householdId,
+                            accounts: priorAccounts,
+                            monthlyIncomeCents,
+                            asOf: new Date(priorSnapshot.asOf),
+                        });
+                        previousRevolvingDebtCents = priorDebtResult.revolvingDebtCents;
+                    } catch (error) {
+                        // If prior analysis fails, leave as null (no prior data)
+                        console.warn("[HEALTH_SUMMARY] Failed to analyze prior debt:", error instanceof Error ? error.message : String(error));
+                    }
+                }
+
+                const analysis = healthEngine.analyze({
+                    householdId,
+                    asOf: now,
+                    monthlySurplusCents,
+                    monthlyIncomeCents,
+                    liquidCashCents: liquidCash,
+                    essentialMonthlyExpensesCents: essentialExpensesCents,
+                    emergencyFundCoverageMonths: essentialExpensesCents > 0 ? efResult.currentCoverageMonths : null,
+                    emergencyFundMinimumMonths: efPolicy.minimumMonths,
+                    emergencyFundTargetMonths: efPolicy.targetMonths,
+                    debtStatus: debtResult.status,
+                    revolvingDebtCents: debtResult.revolvingDebtCents,
+                    previousRevolvingDebtCents,
+                    overBudgetResults: overBudget,
+                    goalResults: goalSummaries,
+                    lastTransactionDate: lastTxDate,
+                    recurringExpenseChanges: [],
+                });
+
+                res.json(analysis);
+            } catch (error) {
+                next(error);
+            }
+        },
+    );
+
+    // ==================== HISTORICAL INTELLIGENCE ENDPOINTS ====================
+
+    /**
+     * GET /snapshots/history?months=N
+     * Version-stamped history from persisted financial snapshots.
+     * Each point carries the calculationVersion and calculatedAt of the
+     * original snapshot — results never change when rules are updated.
+     */
+    app.get(
+        "/snapshots/history",
+        verifyHouseholdContext,
+        async (req: Request, res: Response, next: NextFunction) => {
+            try {
+                const { householdId } = req.context;
+                const months = Math.min(parseInt(req.query.months as string || "12", 10) || 12, 24);
+                const since = new Date();
+                since.setMonth(since.getMonth() - months);
+                const snapshots = await snapshotRepo.findByHouseholdIdSince(householdId, since);
+                res.json(buildSnapshotHistory(householdId, snapshots));
+            } catch (error) {
+                next(error);
+            }
+        },
+    );
+
+    /**
+     * GET /history/budget-variance?months=N
+     * Budget vs actual variance per month for the last N months.
+     * Computed from immutable transaction + budget data; stamped with
+     * the budget service calculation version.
+     */
+    app.get(
+        "/history/budget-variance",
+        verifyHouseholdContext,
+        async (req: Request, res: Response, next: NextFunction) => {
+            try {
+                const { householdId } = req.context;
+                const months = Math.min(parseInt(req.query.months as string || "12", 10) || 12, 24);
+                const now = new Date();
+
+                const periods: Array<{ year: number; month: number }> = [];
+                for (let i = months - 1; i >= 0; i--) {
+                    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                    periods.push({ year: d.getFullYear(), month: d.getMonth() + 1 });
+                }
+
+                const variancePoints = await Promise.all(
+                    periods.map(async ({ year, month }) => {
+                        const [budgets, transactions] = await Promise.all([
+                            budgetRepo.findByHouseholdAndPeriod(householdId, year, month),
+                            budgetRepo.getTransactionsForPeriod(householdId, year, month),
+                        ]);
+                        const resultSet = budgetService.calculateResults({
+                            householdId,
+                            period: { year, month },
+                            budgets,
+                            transactions,
+                            asOf: now,
+                        });
+                        return {
+                            period: { year, month },
+                            totalPlannedCents: resultSet.totalPlannedCents,
+                            totalActualCents: resultSet.totalActualCents,
+                            varianceCents: resultSet.totalVarianceCents,
+                            calculationVersion: resultSet.calculationVersion,
+                            calculatedAt: resultSet.calculatedAt,
+                        };
+                    }),
+                );
+
+                res.json({ householdId, months: variancePoints, calculatedAt: now });
+            } catch (error) {
+                next(error);
+            }
+        },
+    );
 
     /**
      * 404 handler

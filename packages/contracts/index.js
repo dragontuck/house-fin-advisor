@@ -4,7 +4,7 @@
  * These types are shared across all layers (API, domain, UI)
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ReviewStatus = exports.ReviewSeverity = exports.ReviewType = exports.ReconciliationState = exports.ExtractionMethod = exports.DocumentSourceType = exports.DocumentProcessingStatus = exports.FinancialHealthStatus = exports.AccountStatus = exports.AccountOwnership = exports.AccountType = exports.HouseholdMemberVisibility = exports.HouseholdMemberRole = exports.MoneyToDollars = exports.MoneyFromDollars = exports.Money = exports.EntityId = void 0;
+exports.AttentionItemStatus = exports.AttentionSeverity = exports.AttentionItemType = exports.DebtCategory = exports.DebtHealthStatus = exports.EmergencyFundTrend = exports.EmergencyFundStatus = exports.GoalStatus = exports.GoalType = exports.ForecastConfidence = exports.RecurringFrequency = exports.BudgetStatus = exports.BudgetCategory = exports.ReviewStatus = exports.ReviewSeverity = exports.ReviewType = exports.ReconciliationState = exports.ExtractionMethod = exports.DocumentSourceType = exports.DocumentProcessingStatus = exports.FinancialHealthStatus = exports.AccountStatus = exports.AccountOwnership = exports.AccountType = exports.HouseholdMemberVisibility = exports.HouseholdMemberRole = exports.MoneyToDollars = exports.MoneyFromDollars = exports.Money = exports.EntityId = void 0;
 const EntityId = (id) => id;
 exports.EntityId = EntityId;
 const Money = (cents) => {
@@ -57,8 +57,9 @@ var AccountStatus;
 var FinancialHealthStatus;
 (function (FinancialHealthStatus) {
     FinancialHealthStatus["HEALTHY"] = "HEALTHY";
-    FinancialHealthStatus["ATTENTION"] = "ATTENTION";
+    FinancialHealthStatus["WATCH"] = "WATCH";
     FinancialHealthStatus["AT_RISK"] = "AT_RISK";
+    FinancialHealthStatus["CRITICAL"] = "CRITICAL";
 })(FinancialHealthStatus || (exports.FinancialHealthStatus = FinancialHealthStatus = {}));
 // Document/Statement types for Slice 2
 var DocumentProcessingStatus;
@@ -139,4 +140,122 @@ var ReviewStatus;
     ReviewStatus["RESOLVED"] = "RESOLVED";
     ReviewStatus["ARCHIVED"] = "ARCHIVED";
 })(ReviewStatus || (exports.ReviewStatus = ReviewStatus = {}));
+// ── Slice 3: Budget types ──────────────────────────────────────────────────
+/** Standard spending categories. Stored as VARCHAR; custom strings are allowed. */
+var BudgetCategory;
+(function (BudgetCategory) {
+    BudgetCategory["HOUSING"] = "HOUSING";
+    BudgetCategory["UTILITIES"] = "UTILITIES";
+    BudgetCategory["GROCERIES"] = "GROCERIES";
+    BudgetCategory["DINING_OUT"] = "DINING_OUT";
+    BudgetCategory["TRANSPORTATION"] = "TRANSPORTATION";
+    BudgetCategory["FUEL"] = "FUEL";
+    BudgetCategory["INSURANCE"] = "INSURANCE";
+    BudgetCategory["HEALTHCARE"] = "HEALTHCARE";
+    BudgetCategory["SUBSCRIPTIONS"] = "SUBSCRIPTIONS";
+    BudgetCategory["ENTERTAINMENT"] = "ENTERTAINMENT";
+    BudgetCategory["CLOTHING"] = "CLOTHING";
+    BudgetCategory["PERSONAL_CARE"] = "PERSONAL_CARE";
+    BudgetCategory["EDUCATION"] = "EDUCATION";
+    BudgetCategory["CHILDCARE"] = "CHILDCARE";
+    BudgetCategory["SAVINGS_CONTRIBUTION"] = "SAVINGS_CONTRIBUTION";
+    BudgetCategory["DEBT_PAYMENT"] = "DEBT_PAYMENT";
+    BudgetCategory["OTHER"] = "OTHER";
+})(BudgetCategory || (exports.BudgetCategory = BudgetCategory = {}));
+var BudgetStatus;
+(function (BudgetStatus) {
+    BudgetStatus["ON_TRACK"] = "ON_TRACK";
+    BudgetStatus["OVER_BUDGET"] = "OVER_BUDGET";
+    BudgetStatus["UNBUDGETED"] = "UNBUDGETED";
+    BudgetStatus["NO_SPENDING"] = "NO_SPENDING";
+})(BudgetStatus || (exports.BudgetStatus = BudgetStatus = {}));
+// ── Slice 3: Cash Flow & Recurring Detection types ─────────────────────────
+var RecurringFrequency;
+(function (RecurringFrequency) {
+    RecurringFrequency["WEEKLY"] = "WEEKLY";
+    RecurringFrequency["BIWEEKLY"] = "BIWEEKLY";
+    RecurringFrequency["MONTHLY"] = "MONTHLY";
+    RecurringFrequency["QUARTERLY"] = "QUARTERLY";
+    RecurringFrequency["ANNUAL"] = "ANNUAL";
+    RecurringFrequency["IRREGULAR"] = "IRREGULAR";
+    RecurringFrequency["UNKNOWN"] = "UNKNOWN";
+})(RecurringFrequency || (exports.RecurringFrequency = RecurringFrequency = {}));
+var ForecastConfidence;
+(function (ForecastConfidence) {
+    ForecastConfidence["HIGH"] = "HIGH";
+    ForecastConfidence["MEDIUM"] = "MEDIUM";
+    ForecastConfidence["LOW"] = "LOW";
+})(ForecastConfidence || (exports.ForecastConfidence = ForecastConfidence = {}));
+// ── Slice 3: Savings Goals & Emergency Fund ───────────────────────────────────
+var GoalType;
+(function (GoalType) {
+    GoalType["EMERGENCY_FUND"] = "EMERGENCY_FUND";
+    GoalType["VACATION"] = "VACATION";
+    GoalType["ENTERTAINMENT"] = "ENTERTAINMENT";
+    GoalType["PROJECT"] = "PROJECT";
+    GoalType["RETIREMENT"] = "RETIREMENT";
+    GoalType["CUSTOM"] = "CUSTOM";
+})(GoalType || (exports.GoalType = GoalType = {}));
+var GoalStatus;
+(function (GoalStatus) {
+    GoalStatus["ON_TRACK"] = "ON_TRACK";
+    GoalStatus["AHEAD"] = "AHEAD";
+    GoalStatus["BEHIND"] = "BEHIND";
+    GoalStatus["AT_RISK"] = "AT_RISK";
+    GoalStatus["COMPLETED"] = "COMPLETED";
+})(GoalStatus || (exports.GoalStatus = GoalStatus = {}));
+var EmergencyFundStatus;
+(function (EmergencyFundStatus) {
+    EmergencyFundStatus["CRITICAL"] = "CRITICAL";
+    EmergencyFundStatus["WATCH"] = "WATCH";
+    EmergencyFundStatus["ADEQUATE"] = "ADEQUATE";
+    EmergencyFundStatus["ON_TARGET"] = "ON_TARGET";
+    EmergencyFundStatus["FULLY_FUNDED"] = "FULLY_FUNDED";
+})(EmergencyFundStatus || (exports.EmergencyFundStatus = EmergencyFundStatus = {}));
+var EmergencyFundTrend;
+(function (EmergencyFundTrend) {
+    EmergencyFundTrend["IMPROVING"] = "IMPROVING";
+    EmergencyFundTrend["STABLE"] = "STABLE";
+    EmergencyFundTrend["DECLINING"] = "DECLINING";
+    EmergencyFundTrend["UNKNOWN"] = "UNKNOWN";
+})(EmergencyFundTrend || (exports.EmergencyFundTrend = EmergencyFundTrend = {}));
+// ── Debt Intelligence ─────────────────────────────────────────────────────────
+var DebtHealthStatus;
+(function (DebtHealthStatus) {
+    DebtHealthStatus["HEALTHY"] = "HEALTHY";
+    DebtHealthStatus["WATCH"] = "WATCH";
+    DebtHealthStatus["AT_RISK"] = "AT_RISK";
+    DebtHealthStatus["CRITICAL"] = "CRITICAL";
+})(DebtHealthStatus || (exports.DebtHealthStatus = DebtHealthStatus = {}));
+/** Broad category used in debt rollup calculations. */
+var DebtCategory;
+(function (DebtCategory) {
+    DebtCategory["REVOLVING"] = "REVOLVING";
+    DebtCategory["INSTALLMENT"] = "INSTALLMENT";
+    DebtCategory["MORTGAGE"] = "MORTGAGE";
+    DebtCategory["UNKNOWN"] = "UNKNOWN";
+})(DebtCategory || (exports.DebtCategory = DebtCategory = {}));
+// ── Financial Health & Attention Engine ──────────────────────────────────────
+var AttentionItemType;
+(function (AttentionItemType) {
+    AttentionItemType["BUDGET_OVER"] = "BUDGET_OVER";
+    AttentionItemType["CASH_FLOW_WARNING"] = "CASH_FLOW_WARNING";
+    AttentionItemType["EMERGENCY_FUND_LOW"] = "EMERGENCY_FUND_LOW";
+    AttentionItemType["GOAL_BEHIND"] = "GOAL_BEHIND";
+    AttentionItemType["DEBT_INCREASE"] = "DEBT_INCREASE";
+    AttentionItemType["DATA_STALE"] = "DATA_STALE";
+    AttentionItemType["RECURRING_EXPENSE_CHANGE"] = "RECURRING_EXPENSE_CHANGE";
+})(AttentionItemType || (exports.AttentionItemType = AttentionItemType = {}));
+var AttentionSeverity;
+(function (AttentionSeverity) {
+    AttentionSeverity["INFO"] = "INFO";
+    AttentionSeverity["WARNING"] = "WARNING";
+    AttentionSeverity["CRITICAL"] = "CRITICAL";
+})(AttentionSeverity || (exports.AttentionSeverity = AttentionSeverity = {}));
+var AttentionItemStatus;
+(function (AttentionItemStatus) {
+    AttentionItemStatus["ACTIVE"] = "ACTIVE";
+    AttentionItemStatus["DISMISSED"] = "DISMISSED";
+    AttentionItemStatus["RESOLVED"] = "RESOLVED";
+})(AttentionItemStatus || (exports.AttentionItemStatus = AttentionItemStatus = {}));
 //# sourceMappingURL=index.js.map

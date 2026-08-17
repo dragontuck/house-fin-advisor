@@ -265,7 +265,7 @@ export class FinancialSnapshotCalculator {
      * Health Status Rules:
      * - AT_RISK: Monthly deficit OR negative net worth with insufficient cash reserves
      * - HEALTHY: Positive net worth AND positive monthly surplus AND reasonable debt-to-income
-     * - ATTENTION: Everything else
+     * - WATCH: Everything else
      *
      * @param metrics - Calculated metrics
      * @returns FinancialHealthStatus
@@ -299,8 +299,8 @@ export class FinancialSnapshotCalculator {
             return FinancialHealthStatus.HEALTHY;
         }
 
-        // ATTENTION: Everything else (stable but could improve)
-        return FinancialHealthStatus.ATTENTION;
+        // WATCH: Everything else (stable but could improve)
+        return FinancialHealthStatus.WATCH;
     }
 
     /**

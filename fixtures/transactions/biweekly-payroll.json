@@ -1,0 +1,187 @@
+{
+    "description": "12 biweekly payroll deposits plus monthly rent and a one-time medical payment. Payroll should be BIWEEKLY high-confidence; rent should be MONTHLY high-confidence; medical (single occurrence) must not appear as a pattern.",
+    "asOf": "2024-06-15",
+    "transactions": [
+        {
+            "id": "pay-01",
+            "transactionDate": "2024-01-05",
+            "amountCents": -250000,
+            "direction": "CREDIT",
+            "merchant": "Acme Corp Direct Dep",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "pay-02",
+            "transactionDate": "2024-01-19",
+            "amountCents": -250000,
+            "direction": "CREDIT",
+            "merchant": "Acme Corp Direct Dep",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "pay-03",
+            "transactionDate": "2024-02-02",
+            "amountCents": -250000,
+            "direction": "CREDIT",
+            "merchant": "Acme Corp Direct Dep",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "pay-04",
+            "transactionDate": "2024-02-16",
+            "amountCents": -250000,
+            "direction": "CREDIT",
+            "merchant": "Acme Corp Direct Dep",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "pay-05",
+            "transactionDate": "2024-03-01",
+            "amountCents": -250000,
+            "direction": "CREDIT",
+            "merchant": "Acme Corp Direct Dep",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "pay-06",
+            "transactionDate": "2024-03-15",
+            "amountCents": -250000,
+            "direction": "CREDIT",
+            "merchant": "Acme Corp Direct Dep",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "pay-07",
+            "transactionDate": "2024-03-29",
+            "amountCents": -250000,
+            "direction": "CREDIT",
+            "merchant": "Acme Corp Direct Dep",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "pay-08",
+            "transactionDate": "2024-04-12",
+            "amountCents": -250000,
+            "direction": "CREDIT",
+            "merchant": "Acme Corp Direct Dep",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "pay-09",
+            "transactionDate": "2024-04-26",
+            "amountCents": -250000,
+            "direction": "CREDIT",
+            "merchant": "Acme Corp Direct Dep",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "pay-10",
+            "transactionDate": "2024-05-10",
+            "amountCents": -250000,
+            "direction": "CREDIT",
+            "merchant": "Acme Corp Direct Dep",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "pay-11",
+            "transactionDate": "2024-05-24",
+            "amountCents": -250000,
+            "direction": "CREDIT",
+            "merchant": "Acme Corp Direct Dep",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "pay-12",
+            "transactionDate": "2024-06-07",
+            "amountCents": -250000,
+            "direction": "CREDIT",
+            "merchant": "Acme Corp Direct Dep",
+            "category": "INCOME",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "rent-01",
+            "transactionDate": "2024-01-02",
+            "amountCents": 180000,
+            "direction": "DEBIT",
+            "merchant": "Landlord LLC",
+            "category": "HOUSING",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "rent-02",
+            "transactionDate": "2024-02-01",
+            "amountCents": 180000,
+            "direction": "DEBIT",
+            "merchant": "Landlord LLC",
+            "category": "HOUSING",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "rent-03",
+            "transactionDate": "2024-03-01",
+            "amountCents": 180000,
+            "direction": "DEBIT",
+            "merchant": "Landlord LLC",
+            "category": "HOUSING",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "rent-04",
+            "transactionDate": "2024-04-01",
+            "amountCents": 180000,
+            "direction": "DEBIT",
+            "merchant": "Landlord LLC",
+            "category": "HOUSING",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "rent-05",
+            "transactionDate": "2024-05-01",
+            "amountCents": 180000,
+            "direction": "DEBIT",
+            "merchant": "Landlord LLC",
+            "category": "HOUSING",
+            "accountId": "acct-chk"
+        },
+        {
+            "id": "med-01",
+            "transactionDate": "2024-03-22",
+            "amountCents": 35000,
+            "direction": "DEBIT",
+            "merchant": "City Medical Center",
+            "category": "HEALTHCARE",
+            "accountId": "acct-chk"
+        }
+    ],
+    "expectedPatterns": [
+        {
+            "normalizedMerchant": "acme direct dep",
+            "direction": "CREDIT",
+            "frequency": "BIWEEKLY",
+            "minConfidence": 0.80,
+            "occurrenceCount": 12
+        },
+        {
+            "normalizedMerchant": "landlord",
+            "direction": "DEBIT",
+            "frequency": "MONTHLY",
+            "minConfidence": 0.75,
+            "occurrenceCount": 5
+        }
+    ],
+    "absentMerchants": [
+        "City Medical Center"
+    ]
+}

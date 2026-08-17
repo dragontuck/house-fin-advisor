@@ -58,8 +58,9 @@ export enum AccountStatus {
 
 export enum FinancialHealthStatus {
     HEALTHY = "HEALTHY",
-    ATTENTION = "ATTENTION",
+    WATCH = "WATCH",
     AT_RISK = "AT_RISK",
+    CRITICAL = "CRITICAL",
 }
 
 // Domain objects
@@ -93,6 +94,13 @@ export interface Account {
     status: AccountStatus;
     createdAt: Date;
     updatedAt: Date;
+    // Debt-specific optional fields (populated for CREDIT_CARD, LOAN, MORTGAGE)
+    creditLimitCents?: number | null;
+    interestRateBps?: number | null;
+    minimumPaymentCents?: number | null;
+    scheduledPaymentCents?: number | null;
+    statementBalanceCents?: number | null;
+    revolvingBalanceCents?: number | null;
 }
 
 export interface FinancialSnapshot {
@@ -123,6 +131,10 @@ export interface HouseholdSettings {
     incomeSource: "manual_entry" | "bank_feed" | "user_provided";
     updatedAt: Date;
     updatedBy: EntityId;
+    /** Emergency fund coverage thresholds in calendar months. Defaults: 3 / 6 / 9. */
+    emergencyFundMinimumMonths?: number;
+    emergencyFundTargetMonths?: number;
+    emergencyFundStretchMonths?: number;
 }
 
 // API Request/Response types
@@ -821,4 +833,593 @@ export interface PostingStatisticsResponse {
 
     // Configuration
     autoPostConfig: AutoPostConfig;
+}
+
+// ── Slice 3: Budget types ──────────────────────────────────────────────────
+
+/** Standard spending categories. Stored as VARCHAR; custom strings are allowed. */
+export enum BudgetCategory {
+    HOUSING = "HOUSING",
+    UTILITIES = "UTILITIES",
+    GROCERIES = "GROCERIES",
+    DINING_OUT = "DINING_OUT",
+    TRANSPORTATION = "TRANSPORTATION",
+    FUEL = "FUEL",
+    INSURANCE = "INSURANCE",
+    HEALTHCARE = "HEALTHCARE",
+    SUBSCRIPTIONS = "SUBSCRIPTIONS",
+    ENTERTAINMENT = "ENTERTAINMENT",
+    CLOTHING = "CLOTHING",
+    PERSONAL_CARE = "PERSONAL_CARE",
+    EDUCATION = "EDUCATION",
+    CHILDCARE = "CHILDCARE",
+    SAVINGS_CONTRIBUTION = "SAVINGS_CONTRIBUTION",
+    DEBT_PAYMENT = "DEBT_PAYMENT",
+    OTHER = "OTHER",
+}
+
+export interface BudgetPeriod {
+    year: number;
+    month: number; // 1–12
+}
+
+/** Household-defined spending plan for a single category in a single month. */
+export interface Budget {
+    id: EntityId;
+    householdId: EntityId;
+    periodYear: number;
+    periodMonth: number; // 1–12
+    category: string;    // matches posted_transactions.category
+    amountCents: Money;  // planned allowance; 0 is valid
+    goalId?: EntityId;
+    notes?: string;
+    version: number;     // optimistic concurrency
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+export enum BudgetStatus {
+    ON_TRACK = "ON_TRACK",       // spending ≤ planned
+    OVER_BUDGET = "OVER_BUDGET", // spending > planned
+    UNBUDGETED = "UNBUDGETED",   // transactions present, no budget defined
+    NO_SPENDING = "NO_SPENDING", // budget defined, no transactions yet
+}
+
+/** Calculated result for one category/period combination. */
+export interface BudgetResult {
+    category: string;
+    period: BudgetPeriod;
+    plannedCents: Money;           // 0 when hasBudget = false
+    actualCents: Money;            // sum of debit − credit transactions in category/period
+    remainingCents: Money;         // plannedCents − actualCents (negative when over budget)
+    varianceCents: Money;          // actualCents − plannedCents (positive = over budget)
+    variancePercent: number | null; // null when plannedCents = 0 and hasBudget = false
+    projectedMonthEndCents: Money; // linear projection to period end; equals actual when period closed
+    status: BudgetStatus;
+    hasBudget: boolean;
+    transactionCount: number;
+    calculatedAt: Date;
+    calculationVersion: number;
+}
+
+/** Full budget picture for a household in a given period. */
+export interface BudgetResultSet {
+    householdId: EntityId;
+    period: BudgetPeriod;
+    results: BudgetResult[];
+    totalPlannedCents: Money;
+    totalActualCents: Money;
+    totalRemainingCents: Money;
+    totalVarianceCents: Money;
+    unbudgetedSpendingCents: Money; // actual spending with no matching budget
+    asOf: Date;
+    calculatedAt: Date;
+    calculationVersion: number;
+}
+
+export interface CreateBudgetRequest {
+    periodYear: number;
+    periodMonth: number;
+    category: string;
+    amountCents: number; // plain number from API; service casts to Money
+    goalId?: string;
+    notes?: string;
+}
+
+export interface UpdateBudgetRequest {
+    amountCents?: number;
+    notes?: string;
+}
+
+export interface CategorizationRequest {
+    category: string; // empty string clears the category
+}
+
+// ── Slice 3: Cash Flow & Recurring Detection types ─────────────────────────
+
+export enum RecurringFrequency {
+    WEEKLY = "WEEKLY",
+    BIWEEKLY = "BIWEEKLY",
+    MONTHLY = "MONTHLY",
+    QUARTERLY = "QUARTERLY",
+    ANNUAL = "ANNUAL",
+    IRREGULAR = "IRREGULAR",
+    UNKNOWN = "UNKNOWN",
+}
+
+/** A detected recurring transaction pattern derived from historical transactions. */
+export interface RecurringPattern {
+    merchant: string;
+    direction: "DEBIT" | "CREDIT";
+    frequency: RecurringFrequency;
+    /** Median absolute amount in cents. */
+    typicalAmountCents: number;
+    /** Mean absolute amount in cents. */
+    averageAmountCents: number;
+    /** Max deviation from median as a fraction of median (0–1). */
+    amountVariancePct: number;
+    /** 0–1 composite score derived from occurrence count, amount consistency, and gap regularity. */
+    confidence: number;
+    occurrenceCount: number;
+    mostCommonCategory: string | null;
+    firstSeenDate: Date;
+    lastSeenDate: Date;
+    /** null for IRREGULAR / UNKNOWN — not enough information to project a date. */
+    estimatedNextDate: Date | null;
+    /** IDs of the source posted_transactions that make up this pattern. */
+    sourceTransactionIds: string[];
+}
+
+export enum ForecastConfidence {
+    HIGH = "HIGH",       // ≥ 3 months history, recurring patterns confirmed
+    MEDIUM = "MEDIUM",   // 2–3 months history or patterns have moderate confidence
+    LOW = "LOW",         // insufficient data; treat output as rough estimate
+}
+
+/** Records what assumption underpins a projection field. */
+export interface ForecastAssumption {
+    field: string;
+    source: "RECURRING_PATTERN" | "EXPLICIT_BUDGET" | "HOUSEHOLD_SETTINGS" | "HISTORICAL_AVERAGE";
+    description: string;
+    confidence: number; // 0–1
+}
+
+/** Projected cash flow for a single calendar month. */
+export interface CashFlowProjection {
+    householdId: EntityId;
+    asOf: Date;
+    period: BudgetPeriod;
+    startingCashCents: Money;
+    confirmedIncomeCents: Money;               // already received this period
+    expectedIncomeCents: Money;                // confirmed + expected remaining
+    expectedEssentialExpensesCents: Money;
+    expectedDiscretionaryExpensesCents: Money;
+    expectedGoalsFundingCents: Money;          // budget entries linked to goals
+    projectedEndingCashCents: Money;
+    monthlySurplusCents: Money;
+    confidence: ForecastConfidence;
+    assumptions: ForecastAssumption[];
+    calculatedAt: Date;
+    calculationVersion: number;
+}
+
+/** Actual income / expense summary for one completed (or current) calendar month. */
+export interface MonthlyCashFlow {
+    period: BudgetPeriod;
+    incomeCents: Money;      // total CREDIT transaction amounts
+    expensesCents: Money;    // total DEBIT transaction amounts (positive)
+    surplusCents: Money;     // income − expenses
+    transactionCount: number;
+    isComplete: boolean;     // false when the period is the current calendar month
+}
+
+/** Aggregated historical cash flow summary for a household. */
+export interface CashFlowHistory {
+    householdId: EntityId;
+    months: MonthlyCashFlow[];
+    averageMonthlyIncomeCents: Money;
+    averageMonthlyExpensesCents: Money;
+    averageMonthlySurplusCents: Money;
+    calculatedAt: Date;
+}
+
+/** Multi-month forward-looking cash-flow forecast. */
+export interface ShortTermForecast {
+    householdId: EntityId;
+    startingCashCents: Money;
+    months: CashFlowProjection[];
+    overallConfidence: ForecastConfidence;
+    calculatedAt: Date;
+    calculationVersion: number;
+}
+
+// ── Slice 3: Savings Goals & Emergency Fund ───────────────────────────────────
+
+export enum GoalType {
+    EMERGENCY_FUND = "EMERGENCY_FUND",
+    VACATION = "VACATION",
+    ENTERTAINMENT = "ENTERTAINMENT",
+    PROJECT = "PROJECT",
+    RETIREMENT = "RETIREMENT",
+    CUSTOM = "CUSTOM",
+}
+
+export enum GoalStatus {
+    ON_TRACK = "ON_TRACK",
+    AHEAD = "AHEAD",
+    BEHIND = "BEHIND",
+    AT_RISK = "AT_RISK",
+    COMPLETED = "COMPLETED",
+}
+
+export enum EmergencyFundStatus {
+    CRITICAL = "CRITICAL",    // no eligible cash
+    WATCH = "WATCH",       // below minimum threshold
+    ADEQUATE = "ADEQUATE",    // meets minimum, below target
+    ON_TARGET = "ON_TARGET",   // meets target, below stretch
+    FULLY_FUNDED = "FULLY_FUNDED",// at or above stretch threshold
+}
+
+export enum EmergencyFundTrend {
+    IMPROVING = "IMPROVING",
+    STABLE = "STABLE",
+    DECLINING = "DECLINING",
+    UNKNOWN = "UNKNOWN",
+}
+
+export interface EmergencyFundPolicy {
+    minimumMonths: number;
+    targetMonths: number;
+    stretchMonths: number;
+}
+
+/** A household savings target tracked over time. */
+export interface SavingsGoal {
+    id: EntityId;
+    householdId: EntityId;
+    name: string;
+    type: GoalType;
+    targetAmountCents: Money;
+    currentAmountCents: Money;
+    monthlyContributionCents: Money;
+    targetDate: Date | null;
+    startDate: Date;
+    notes: string | null;
+    version: number;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+/** Calculated result for a single savings goal. */
+export interface GoalResult {
+    goalId: EntityId;
+    householdId: EntityId;
+    name: string;
+    type: GoalType;
+    targetAmountCents: Money;
+    currentAmountCents: Money;
+    /** 0–100, one decimal place. */
+    percentComplete: number;
+    remainingAmountCents: Money;
+    monthlyContributionCents: Money;
+    /** Monthly contribution required to reach target by targetDate; 0 when no targetDate. */
+    requiredMonthlyContributionCents: Money;
+    projectedCompletionDate: Date | null;
+    targetDate: Date | null;
+    status: GoalStatus;
+    calculatedAt: Date;
+    calculationVersion: number;
+}
+
+/** Point-in-time emergency fund adequacy analysis. */
+export interface EmergencyFundResult {
+    householdId: EntityId;
+    eligibleCashCents: Money;
+    essentialMonthlyExpensesCents: Money;
+    /** Months of essential expenses covered. Rounded to one decimal. */
+    currentCoverageMonths: number;
+    minimumTargetCents: Money;
+    preferredTargetCents: Money;
+    stretchTargetCents: Money;
+    /** Negative = underfunded relative to minimum. */
+    gapToMinimumCents: Money;
+    gapToPreferredCents: Money;
+    trend: EmergencyFundTrend;
+    status: EmergencyFundStatus;
+    /** Human-readable observation. Not a recommendation. */
+    statusDescription: string;
+    policy: EmergencyFundPolicy;
+    calculatedAt: Date;
+    calculationVersion: number;
+}
+
+export interface CreateSavingsGoalRequest {
+    name: string;
+    type: GoalType;
+    targetAmountCents: number;
+    currentAmountCents?: number;
+    monthlyContributionCents?: number;
+    /** ISO date string (YYYY-MM-DD). */
+    targetDate?: string;
+    notes?: string;
+}
+
+export interface UpdateSavingsGoalRequest {
+    name?: string;
+    targetAmountCents?: number;
+    currentAmountCents?: number;
+    monthlyContributionCents?: number;
+    targetDate?: string | null;
+    notes?: string | null;
+}
+
+// ── Debt Intelligence ─────────────────────────────────────────────────────────
+
+export enum DebtHealthStatus {
+    HEALTHY = "HEALTHY",
+    WATCH = "WATCH",
+    AT_RISK = "AT_RISK",
+    CRITICAL = "CRITICAL",
+}
+
+/** Broad category used in debt rollup calculations. */
+export enum DebtCategory {
+    REVOLVING = "REVOLVING",    // credit cards (balance being carried month-to-month)
+    INSTALLMENT = "INSTALLMENT",  // personal loans, auto loans
+    MORTGAGE = "MORTGAGE",     // real-estate secured
+    UNKNOWN = "UNKNOWN",      // type is known but debt detail is insufficient
+}
+
+/** Per-account detail emitted by the debt intelligence layer. */
+export interface DebtAccountDetail {
+    accountId: EntityId;
+    accountName: string;
+    accountType: AccountType;
+    category: DebtCategory;
+
+    /** Outstanding balance (positive cents). */
+    currentBalanceCents: number;
+
+    /** Credit limit for revolving accounts; null when not provided. */
+    creditLimitCents: number | null;
+
+    /** Utilisation ratio 0–1 for revolving accounts; null when limit unknown. */
+    utilizationRatio: number | null;
+
+    /** Annual interest rate in basis points (e.g. 1975 = 19.75 %); null when unknown. */
+    interestRateBps: number | null;
+
+    /** Minimum monthly payment due; null when unknown. */
+    minimumPaymentCents: number | null;
+
+    /** Scheduled/actual monthly payment amount; null when unknown. */
+    scheduledPaymentCents: number | null;
+
+    /**
+     * Statement balance as of the last billing cycle.
+     * Explicitly populated from account data — NOT derived from transactions.
+     */
+    statementBalanceCents: number | null;
+
+    /**
+     * Portion of the balance the household is carrying beyond the statement period.
+     * Null means the data is insufficient to determine revolving status.
+     */
+    revolvingBalanceCents: number | null;
+}
+
+/** A single factual observation about the household's debt position. */
+export interface DebtObservation {
+    /** Machine-readable code for UI rendering. */
+    code: string;
+    /** Human-readable sentence — no recommendations, no prescriptions. */
+    message: string;
+}
+
+export interface DebtAnalysis {
+    householdId: EntityId;
+    asOf: Date;
+    calculationVersion: number;
+
+    // ── Aggregates ────────────────────────────────────────────────────────────
+    totalDebtCents: number;
+    revolvingDebtCents: number;
+    installmentDebtCents: number;
+    mortgageDebtCents: number;
+
+    /** Total minimum monthly payments across all debt accounts; null when any account is missing the field. */
+    totalMinimumPaymentCents: number | null;
+
+    /** Total scheduled monthly payments; null when any account is missing the field. */
+    totalScheduledPaymentCents: number | null;
+
+    /**
+     * Weighted average interest rate in basis points.
+     * Null when any debt account is missing an interest rate.
+     */
+    weightedAverageRateBps: number | null;
+
+    /**
+     * Debt-to-income ratio (monthly debt payments / monthly income).
+     * Null when income or payments are unknown.
+     */
+    debtToIncomeRatio: number | null;
+
+    // ── Status ────────────────────────────────────────────────────────────────
+    status: DebtHealthStatus;
+    statusDescription: string;
+
+    // ── Per-account detail ────────────────────────────────────────────────────
+    accounts: DebtAccountDetail[];
+
+    /** Factual observations about the household's debt position. */
+    observations: DebtObservation[];
+}
+
+export interface UpdateDebtAccountRequest {
+    creditLimitCents?: number | null;
+    /** Annual interest rate in basis points (e.g. 1975 = 19.75 %). */
+    interestRateBps?: number | null;
+    minimumPaymentCents?: number | null;
+    scheduledPaymentCents?: number | null;
+    statementBalanceCents?: number | null;
+    revolvingBalanceCents?: number | null;
+}
+
+// ── Financial Health & Attention Engine ──────────────────────────────────────
+
+export enum AttentionItemType {
+    BUDGET_OVER = "BUDGET_OVER",
+    CASH_FLOW_WARNING = "CASH_FLOW_WARNING",
+    EMERGENCY_FUND_LOW = "EMERGENCY_FUND_LOW",
+    GOAL_BEHIND = "GOAL_BEHIND",
+    DEBT_INCREASE = "DEBT_INCREASE",
+    DATA_STALE = "DATA_STALE",
+    RECURRING_EXPENSE_CHANGE = "RECURRING_EXPENSE_CHANGE",
+}
+
+export enum AttentionSeverity {
+    INFO = "INFO",
+    WARNING = "WARNING",
+    CRITICAL = "CRITICAL",
+}
+
+export enum AttentionItemStatus {
+    ACTIVE = "ACTIVE",
+    DISMISSED = "DISMISSED",
+    RESOLVED = "RESOLVED",
+}
+
+export interface AttentionItemMetric {
+    label: string;
+    /** Numeric value behind the condition. */
+    value: number;
+    unit: string;
+}
+
+export interface AttentionItem {
+    /** Deterministic: same condition always produces the same id. */
+    id: EntityId;
+    householdId: EntityId;
+    severity: AttentionSeverity;
+    type: AttentionItemType;
+    title: string;
+    /** Factual one-sentence description. No recommendations. */
+    explanation: string;
+    metric: AttentionItemMetric;
+    /** Which sub-system generated this item (e.g. "budget", "emergency-fund"). */
+    source: string;
+    createdAt: Date;
+    status: AttentionItemStatus;
+    dismissedAt: Date | null;
+    resolvedAt: Date | null;
+}
+
+/** Which rule fired and whether it contributed to the status. */
+export interface HealthFactor {
+    rule: string;
+    triggered: boolean;
+    severity: AttentionSeverity | null;
+    detail: string;
+}
+
+export interface HealthAnalysis {
+    householdId: EntityId;
+    asOf: Date;
+    calculationVersion: number;
+    status: FinancialHealthStatus;
+    statusDescription: string;
+    /** Individual rule evaluation results for explainability. */
+    factors: HealthFactor[];
+    attentionItems: AttentionItem[];
+}
+
+// ── Historical Intelligence & Metric Explainability ──────────────────────────
+
+/** Single labelled input value used in a calculation. */
+export interface CalculationBreakdownItem {
+    label: string;
+    valueCents: number;
+}
+
+/**
+ * Full provenance record for one calculated metric value.
+ * Every metric exposed to the UI must carry one of these.
+ */
+export interface CalculationExplanation {
+    /** Plain-language description of the formula applied. */
+    summary: string;
+    /** The concrete input values that produced this result. */
+    inputs: CalculationBreakdownItem[];
+    /** Assumptions the calculation relied on (human-readable). */
+    assumptions: string[];
+    /** Which system produced this value. */
+    source: "financial_snapshot" | "budget_result" | "goal_setting";
+    /** Version of the calculation rules that were applied. */
+    calculationVersion: number;
+    /** When this value was computed. */
+    calculatedAt: Date;
+    /** ID of the persisted snapshot that anchors this value, if applicable. */
+    snapshotId: EntityId | null;
+}
+
+/** One month of financial state derived from a persisted financial snapshot. */
+export interface SnapshotHistoryPoint {
+    snapshotId: EntityId;
+    period: BudgetPeriod;
+    asOf: Date;
+    /** Version of snapshot-calculator rules that produced this snapshot. */
+    calculationVersion: number;
+    /** Timestamp from the original calculation — never updated by later rule changes. */
+    calculatedAt: Date;
+    incomeCents: number;
+    essentialExpensesCents: number;
+    discretionaryExpensesCents: number;
+    surplusCents: number;
+    debtCents: number;
+    netWorthCents: number;
+    cashCents: number;
+    explanation: {
+        income: CalculationExplanation;
+        expenses: CalculationExplanation;
+        surplus: CalculationExplanation;
+        debt: CalculationExplanation;
+    };
+}
+
+/** Version-stamped history built exclusively from persisted financial snapshots. */
+export interface SnapshotHistory {
+    householdId: EntityId;
+    /** Ordered ascending by period. */
+    months: SnapshotHistoryPoint[];
+    calculatedAt: Date;
+}
+
+/** Budget vs actual for one calendar month. */
+export interface BudgetVariancePoint {
+    period: BudgetPeriod;
+    totalPlannedCents: number;
+    totalActualCents: number;
+    /** actualCents − plannedCents; positive = over budget. */
+    varianceCents: number;
+    calculationVersion: number;
+    calculatedAt: Date;
+}
+
+/** Multi-month budget variance history. */
+export interface BudgetVarianceHistory {
+    householdId: EntityId;
+    months: BudgetVariancePoint[];
+    calculatedAt: Date;
+}
+
+/** Calculation metadata included in the financial-pulse response. */
+export interface PulseCalculationDetails {
+    snapshotId: EntityId;
+    calculationVersion: number;
+    calculatedAt: Date;
+    monthlyIncomeCents: number;
+    monthlyEssentialExpensesCents: number;
+    monthlyDiscretionaryExpensesCents: number;
+    surplusExplanation: string;
 }
