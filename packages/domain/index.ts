@@ -424,4 +424,15 @@ export {
     SNAPSHOT_HISTORY_VERSION,
 } from "./snapshot-history";
 
+// ── Slice 4: Conversational Financial Advisor ──────────────────────────────────
+
+export {
+    AdvisorService,
+    AdvisorConversationRepository,
+    AdvisorMessageRepository,
+    WorkflowStateRepository,
+    ToolExecutionRepository,
+    createAdvisorService,
+} from "./advisor-service";
+
 

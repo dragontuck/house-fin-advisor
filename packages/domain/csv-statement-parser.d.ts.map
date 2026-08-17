@@ -1,1 +1,0 @@
-{"version":3,"file":"csv-statement-parser.d.ts","sourceRoot":"","sources":["csv-statement-parser.ts"],"names":[],"mappings":"AAAA;;;;;;;;;;;;;GAaG;AAEH,OAAO,EACH,WAAW,EACX,WAAW,EACX,eAAe,EAEf,eAAe,EAGlB,MAAM,sBAAsB,CAAC;AA8mB9B,qBAAa,kBAAmB,YAAW,eAAe;IAChD,QAAQ,CAAC,KAAK,EAAE,WAAW,GAAG,OAAO,CAAC,WAAW,CAAC;IAwDlD,KAAK,CAAC,KAAK,EAAE,WAAW,GAAG,OAAO,CAAC,eAAe,CAAC;CAoF5D"}

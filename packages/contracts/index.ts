@@ -1423,3 +1423,333 @@ export interface PulseCalculationDetails {
     monthlyDiscretionaryExpensesCents: number;
     surplusExplanation: string;
 }
+
+// ── AI Advisor Conversation & Workflow Types ──────────────────────────────────
+
+/**
+ * Known activity extracted from conversation (e.g., "car repair", "trip to coast").
+ * Represents user-mentioned expenses/income with confidence level.
+ */
+export interface KnownActivity {
+    id: string;
+    description: string;
+    estimatedAmountCents: Money;
+    amountConfidence: "HIGH" | "MEDIUM" | "LOW";
+    type: "ONE_TIME" | "RECURRING";
+    sourceExtraction?: string;                       // What user said that led to this
+}
+
+/**
+ * Assumption tracked during workflow (e.g., "Grocery spending is $600/month").
+ * Allows reasoning about what we assumed vs. what we know for certain.
+ */
+export interface WorkflowAssumption {
+    key: string;
+    value: string;
+    confidence: "HIGH" | "MEDIUM" | "LOW";
+    reasoning: string;
+    impact: string;                                  // How does it affect our advice?
+}
+
+/**
+ * Proposed budget change in a workflow (e.g., "Increase dining to $600").
+ */
+export interface ProposedChange {
+    category: string;
+    proposedBudgetCents: Money;
+    currentBudgetCents: Money;
+    reason: string;
+}
+
+/**
+ * Primary workflow types the advisor can enter.
+ * Each corresponds to a distinct user intent and AI behavior pattern.
+ */
+export enum AdvisorWorkflow {
+    // Informational workflows (MODE A)
+    FINANCIAL_HEALTH = "FINANCIAL_HEALTH",           // How are we doing?
+    BUDGET_STATUS = "BUDGET_STATUS",                 // Am I over budget?
+    CASH_FLOW = "CASH_FLOW",                         // Cash flow analysis
+    GOAL_STATUS = "GOAL_STATUS",                     // Are goals on track?
+    DEBT_STATUS = "DEBT_STATUS",                     // Debt summary
+
+    // Diagnostic workflows (MODE B)
+    BUDGET_DIAGNOSE = "BUDGET_DIAGNOSE",             // Why am I always over budget?
+
+    // Planning workflows (MODE C)
+    BUDGET_CREATE = "BUDGET_CREATE",                 // Help me create an initial budget
+    BUDGET_REVISE = "BUDGET_REVISE",                 // Help me plan next month
+
+    // Scenario workflows (MODE D)
+    BUDGET_SCENARIO = "BUDGET_SCENARIO",             // What if we spend more on X?
+    AFFORDABILITY = "AFFORDABILITY",                 // Can we afford this?
+
+    // Fallback
+    GENERAL_FINANCIAL_QUESTION = "GENERAL_FINANCIAL_QUESTION", // Anything else
+}
+
+/**
+ * Status of an active workflow.
+ * Workflow state transitions as user and AI interact.
+ */
+export enum WorkflowStatus {
+    ACTIVE = "ACTIVE",                               // Workflow is ongoing
+    WAITING_FOR_USER = "WAITING_FOR_USER",           // AI waiting for user input
+    READY_FOR_REVIEW = "READY_FOR_REVIEW",           // Plan ready for user approval
+    APPROVED = "APPROVED",                           // User approved the plan
+    CANCELLED = "CANCELLED",                         // User cancelled workflow
+    COMPLETED = "COMPLETED",                         // Workflow finished
+}
+
+/**
+ * Role of a message in the conversation.
+ */
+export enum AdvisorMessageRole {
+    USER = "USER",                                   // Human user
+    ASSISTANT = "ASSISTANT",                         // AI advisor
+    SYSTEM = "SYSTEM",                               // System (e.g., workflow transition)
+    TOOL = "TOOL",                                   // Tool execution result
+}
+
+/**
+ * A known upcoming activity that affects budget planning.
+ * User-provided or AI-extracted from natural language.
+ */
+export interface KnownActivity {
+    id: string;                                      // Deterministic ID (e.g., hash of description + amount)
+    description: string;                             // User description (e.g., "car repair")
+    estimatedAmountCents: Money;                     // Amount or estimate
+    amountConfidence: "HIGH" | "MEDIUM" | "LOW";    // How sure are we?
+    type: "ONE_TIME" | "RECURRING";                 // Activity classification
+    sourceExtraction?: string;                       // Original text extracted from (for UX feedback)
+}
+
+/**
+ * Stateful representation of an in-progress workflow.
+ * Separates from conversation history — multiple messages can occur within one workflow state.
+ * Used for multi-turn interactions where user refines a proposal.
+ */
+export interface WorkflowState {
+    id: EntityId;
+    householdId: EntityId;
+    conversationId?: EntityId;                       // Optional: link to conversation if AI-initiated
+    workflowType: AdvisorWorkflow;
+
+    // Planning context
+    planningPeriod?: {
+        year: number;
+        month: number;
+    };
+
+    // For scenario/affordability workflows
+    currentScenario?: {
+        type: "PURCHASE" | "SPENDING_CHANGE" | "INCOME_CHANGE" | "GOAL_ADJUSTMENT";
+        description: string;
+        affectedAmountCents?: Money;
+        baselineScenario?: string;                   // Reference to prior scenario if building on it
+    };
+
+    // For budget planning workflows
+    knownActivities?: KnownActivity[];               // Activities user mentioned
+    proposedChanges?: ProposedChange[];               // Proposed budget/plan changes
+
+    // Reasoning trail
+    assumptions?: WorkflowAssumption[];               // Assumptions we're working with
+
+    // User interaction state
+    pendingQuestions?: Array<{
+        id: string;
+        question: string;
+        why: string;                                 // Why this matters
+        affectsWhat: string;                         // What changes if user answers
+    }>;
+
+    // Metadata
+    status: WorkflowStatus;
+    linkedFinancialSnapshotId?: EntityId;            // Snapshot this workflow is based on
+    linkedSnapshotVersion?: number;                  // For reproducibility
+    createdAt: Date;
+    updatedAt: Date;
+    completedAt?: Date;
+}
+
+/**
+ * Structured AI response distinguishing facts, calculations, assumptions, analysis, and proposals.
+ * Matches AGENTS.md section 5 Fact/Calculation/Assumption/Analysis/Proposal model.
+ */
+export interface AIResponse {
+    // The direct answer to the user's question
+    answer: string;
+
+    // Factual observations from current financial data
+    facts: Array<{
+        statement: string;
+        source: "SNAPSHOT" | "ACCOUNT" | "BUDGET" | "TRANSACTION_HISTORY";
+        confidence: "CERTAIN" | "VERY_HIGH" | "HIGH";
+    }>;
+
+    // Values derived by financial domain services
+    calculations: Array<{
+        name: string;                                // e.g., "monthly surplus"
+        valueCents: Money;
+        formula: string;                            // e.g., "income - expenses"
+        calculationVersion: number;
+    }>;
+
+    // Values not known with certainty
+    assumptions: Array<{
+        key: string;
+        value: string;
+        confidence: "HIGH" | "MEDIUM" | "LOW";
+        reason: string;
+        impact?: string;                             // How this affects the analysis
+    }>;
+
+    // Conclusions drawn from facts and calculations
+    analysis: Array<{
+        conclusion: string;
+        basedOnFacts: string[];                      // Which facts support this
+        basedOnCalculations: string[];               // Which calculations used
+        confidence: "HIGH" | "MEDIUM" | "LOW";
+    }>;
+
+    // Suggested actions (NOT yet approved)
+    proposal?: {
+        title: string;
+        description: string;
+        rationale: string;
+        tradeoffs?: string[];
+        affectedCategories?: string[];
+        estimatedImpactCents?: Money;
+        estimatedImpactDirection: "POSITIVE" | "NEUTRAL" | "NEGATIVE";
+        approval_required: boolean;
+    };
+
+    // Audit trail
+    toolsUsed: string[];                             // Names of financial tools called
+    financialSnapshotVersion: number;                // Version of snapshot this is based on
+    financialSnapshotAsOf: Date;                     // When snapshot was calculated
+
+    // Quality signals
+    confidence: "HIGH" | "MEDIUM" | "LOW";           // Overall confidence in response
+    limitations?: string[];                         // Known limitations or gaps
+}
+
+/**
+ * A single message in a conversation.
+ * Immutable append-only for audit trail.
+ */
+export interface AdvisorMessage {
+    id: EntityId;
+    conversationId: EntityId;
+    role: AdvisorMessageRole;
+    content: string;                                 // Plain text or markdown
+    createdAt: Date;
+
+    // When role = TOOL, references the execution
+    toolExecutionId?: EntityId;
+
+    // Optional structured response (when role = ASSISTANT)
+    aiResponse?: AIResponse;
+
+    // Extra context (workflow state, citations, etc.)
+    metadata?: {
+        workflowId?: EntityId;                       // Workflow this message belongs to
+        workflowType?: AdvisorWorkflow;
+        relatedItems?: {
+            type: "BUDGET" | "GOAL" | "ACCOUNT" | "SCENARIO";
+            id: EntityId;
+            name: string;
+        }[];
+        userFeedback?: "HELPFUL" | "UNHELPFUL" | "NEEDS_REVISION";
+    };
+}
+
+/**
+ * A recorded execution of a financial tool.
+ * Immutable audit log for tracing AI decisions.
+ */
+export interface ToolExecution {
+    id: EntityId;
+    conversationId: EntityId;
+    messageId: EntityId;                             // The message that triggered this
+    toolName: string;                                // e.g., "get_financial_snapshot"
+    inputParams: Record<string, unknown>;            // Tool parameters
+    result?: Record<string, unknown>;                // Tool result
+    errorMessage?: string;                           // If execution failed
+    durationMs: number;                              // How long it took
+    executionVersion: number;                        // Version for reproducibility
+    executedAt: Date;
+    correlationId: EntityId;                         // Trace ID
+}
+
+/**
+ * A conversation between a household member and the financial advisor.
+ * Immutable core fields; mutable only for status/title.
+ */
+export interface AdvisorConversation {
+    id: EntityId;
+    householdId: EntityId;
+    memberId: EntityId;                              // Which household member is talking
+    title: string;                                   // User-provided or AI-suggested topic
+    status: "ACTIVE" | "ARCHIVED" | "DELETED";     // DELETED = soft-delete for audit trail
+    currentWorkflow?: AdvisorWorkflow;               // Current workflow if active
+    currentWorkflowId?: EntityId;                    // Link to WorkflowState
+    createdAt: Date;
+    updatedAt: Date;
+    archivedAt?: Date;
+    messageCount: number;                            // Denormalized for quick queries
+    lastMessageAt: Date;                             // For sorting/ordering
+}
+
+/**
+ * Request to create a new conversation.
+ */
+export interface CreateAdvisorConversationRequest {
+    householdId: EntityId;
+    memberId: EntityId;
+    title?: string;                                  // Auto-generated if not provided
+    initialMessage?: string;                         // First user message
+}
+
+/**
+ * Request to add a message to a conversation.
+ */
+export interface AddAdvisorMessageRequest {
+    conversationId: EntityId;
+    role: AdvisorMessageRole;
+    content: string;
+    metadata?: Record<string, unknown>;
+}
+
+/**
+ * Response from message addition (includes generated messages if AI responded).
+ */
+export interface AddAdvisorMessageResponse {
+    messageId: EntityId;
+    conversationId: EntityId;
+    aiMessages?: AdvisorMessage[];                   // If AI auto-responded
+    nextWorkflowAction?: {
+        type: "ASK_QUESTION" | "PROPOSE_PLAN" | "SHOW_SCENARIO_RESULT" | "WAIT";
+        data: Record<string, unknown>;
+    };
+}
+
+/**
+ * Request to approve a proposed plan/scenario result.
+ */
+export interface ApproveWorkflowRequest {
+    workflowId: EntityId;
+    conversationId: EntityId;
+    approvalMessage?: string;                        // Optional user comment
+}
+
+/**
+ * Response when a workflow is approved.
+ */
+export interface ApproveWorkflowResponse {
+    workflowId: EntityId;
+    status: "APPROVED";
+    permanentId?: EntityId;                          // If plan was saved to persistent state
+    nextMessage: string;                             // Advisor's confirmation
+}
