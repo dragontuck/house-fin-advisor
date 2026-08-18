@@ -261,11 +261,11 @@ export const registerAdvisorConversationRoutes: RouteRegistrar = (context: Route
                     AdvisorWorkflow.BUDGET_CREATE,
                     AdvisorWorkflow.SCENARIO_ANALYSIS,
                 ];
-                
+
                 if (planningIntents.includes(classifiedIntent.intent as any)) {
                     // Extract workflow state from user message
                     const extractedPlanning = WorkflowStateManager.extractPlanningData(content);
-                    
+
                     if (extractedPlanning.activities.length > 0 || extractedPlanning.constraints.length > 0) {
                         // Get or create workflow for this conversation
                         let workflow = await conversationRepo.findById(conversationId as EntityId)
@@ -279,7 +279,7 @@ export const registerAdvisorConversationRoutes: RouteRegistrar = (context: Route
                                 return null;
                             })
                             .catch(() => null);
-                        
+
                         // If no workflow exists, create one
                         if (!workflow) {
                             workflow = await advisorService.startWorkflow(
@@ -288,16 +288,16 @@ export const registerAdvisorConversationRoutes: RouteRegistrar = (context: Route
                                 conversationId as EntityId
                             );
                         }
-                        
+
                         // Update workflow with extracted planning data
                         const updated = await contextService.updateWorkflowStateFromMessage(
                             workflow,
                             content
                         );
-                        
+
                         // Store updated workflow in database
                         await workflowRepo.update(workflow.id, updated);
-                        
+
                         // Get human-readable description
                         workflowDescription = WorkflowStateManager.describeWorkflowState(updated);
                     }

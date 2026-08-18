@@ -72,11 +72,11 @@ export class WorkflowStateManager {
         // This is more reliable than trying to split the message first
         const amountRegex = /\$?([\d,]+(?:\.\d{2})?)/g;
         const amountMatches: Array<{ value: string; amount: number; index: number }> = [];
-        
+
         while ((match = amountRegex.exec(userMessage)) !== null) {
             const amountStr = match[1].replace(/,/g, "");
             const amountCents = Math.round(parseFloat(amountStr) * 100);
-            
+
             if (!isNaN(amountCents) && amountCents > 0 && amountCents < 100000000) {
                 amountMatches.push({
                     value: match[0],
@@ -91,7 +91,7 @@ export class WorkflowStateManager {
         for (let i = 0; i < amountMatches.length; i++) {
             const currentAmount = amountMatches[i];
             const nextAmount = amountMatches[i + 1];
-            
+
             // Extract text after current amount
             let endIndex: number;
             if (nextAmount) {
@@ -101,26 +101,26 @@ export class WorkflowStateManager {
                 // Extract until end of message
                 endIndex = userMessage.length;
             }
-            
+
             const textAfterAmount = userMessage.substring(
                 currentAmount.index + currentAmount.value.length,
                 endIndex
             ).trim();
-            
+
             // Remove leading "for a" or "for", and extract description
             let description = textAfterAmount.replace(/^for\s+(?:a\s+)?/i, '').trim();
-            
+
             // Remove trailing separators and punctuation
             description = description.replace(/\s*(?:,|and).*$/i, '').trim();
             description = description.replace(/[\.,;:!?]+$/, '').trim();
-            
+
             // Skip if empty or already processed
             if (description && !processedDescriptions.has(description.toLowerCase())) {
                 processedDescriptions.add(description.toLowerCase());
-                
+
                 // Capitalize first letter
                 const capitalizedDesc = description.charAt(0).toUpperCase() + description.slice(1);
-                
+
                 activities.push({
                     id: this.generateActivityId(capitalizedDesc, currentAmount.amount),
                     description: capitalizedDesc,
@@ -150,10 +150,10 @@ export class WorkflowStateManager {
                 if (constraint.length > 0) {
                     // Remove trailing words that got captured (shouldn't happen with lookahead but just in case)
                     constraint = constraint.replace(/\s+(unchanged|constant|same|stable|at\s+current.*)$/i, '').trim();
-                    
+
                     if (constraint.length > 0) {
                         const key = `preserve_${constraint.replace(/\s+/g, "_")}`;
-                        
+
                         // Avoid duplicate constraints
                         if (!processedConstraints.has(key)) {
                             processedConstraints.add(key);
@@ -248,7 +248,7 @@ export class WorkflowStateManager {
 
         if (workflow.planningPeriod) {
             const monthNames = ["January", "February", "March", "April", "May", "June",
-                               "July", "August", "September", "October", "November", "December"];
+                "July", "August", "September", "October", "November", "December"];
             const month = monthNames[workflow.planningPeriod.month - 1];
             parts.push(`Planning period: ${month} ${workflow.planningPeriod.year}`);
         }
