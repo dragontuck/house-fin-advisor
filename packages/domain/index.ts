@@ -435,6 +435,11 @@ export {
     createAdvisorService,
 } from "./advisor-service";
 
+export {
+    AdvisorContextService,
+    createAdvisorContextService,
+} from "./advisor-context-service";
+
 // ── Slice 4: AI Tool Contracts ──────────────────────────────────────────────────
 // Re-export from contracts to make available to API layer
 export {

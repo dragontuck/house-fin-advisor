@@ -8,7 +8,9 @@ import {
     ReviewQueueService,
     TransactionPostingService,
     AdvisorService,
+    AdvisorContextService,
 } from "@house-fin/domain";
+import { FinancialContextBuilder } from "@house-fin/ai";
 import {
     PgHouseholdRepository,
     PgHouseholdMemberRepository,
@@ -40,6 +42,8 @@ export interface RouteContext {
     reviewQueueService: ReviewQueueService;
     postingService: TransactionPostingService;
     advisorService: AdvisorService;
+    contextBuilder: FinancialContextBuilder;
+    contextService: AdvisorContextService;
     // Repositories
     householdRepo: PgHouseholdRepository;
     memberRepo: PgHouseholdMemberRepository;
