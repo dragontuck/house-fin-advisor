@@ -15,10 +15,11 @@ import { registerDebtRoutes } from "./debt";
 import { registerHealthRoutes } from "./health";
 import { registerSnapshotRoutes } from "./snapshots";
 import { registerAdvisorConversationRoutes } from "./advisor-conversations";
+import { registerToolExecutionRoutes } from "./tool-execution";
 
 /**
  * All route registrars to be called in order
- * Order: Core → Documents → Posting → Financial Analysis → Health Intelligence → Advisor Conversations
+ * Order: Core → Documents → Posting → Financial Analysis → Health Intelligence → Advisor Conversations → Tools
  */
 const routeRegistrars: RouteRegistrar[] = [
     registerCoreRoutes,                    // Household, accounts, pulse
@@ -31,6 +32,7 @@ const routeRegistrars: RouteRegistrar[] = [
     registerSnapshotRoutes,                // Snapshots and historical data
     registerHealthRoutes,                  // Health analysis and attention items
     registerAdvisorConversationRoutes,     // Conversational advisor with intent classification
+    registerToolExecutionRoutes,           // AI tool execution endpoints
 ];
 
 /**
@@ -58,4 +60,5 @@ export {
     registerHealthRoutes,
     registerSnapshotRoutes,
     registerAdvisorConversationRoutes,
+    registerToolExecutionRoutes,
 };
