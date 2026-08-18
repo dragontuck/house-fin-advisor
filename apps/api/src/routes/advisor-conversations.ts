@@ -5,8 +5,8 @@
 
 import { Request, Response, NextFunction } from "express";
 import { RouteContext, RouteRegistrar } from "./types";
-import { EntityId, AdvisorMessageRole, AdvisorWorkflow, IntentCategory, WorkflowStatus } from "@house-fin/contracts";
-import { createIntentClassifier, WorkflowStateManager } from "@house-fin/domain";
+import { EntityId, AdvisorMessageRole, AdvisorWorkflow } from "@house-fin/contracts";
+import { createIntentClassifier, WorkflowStateManager, IntentCategory } from "@house-fin/domain";
 
 /**
  * Tool availability by intent category
@@ -170,9 +170,7 @@ export const registerAdvisorConversationRoutes: RouteRegistrar = (context: Route
                 }
 
                 const messages = await advisorService.getConversationHistory(
-                    conversationId as EntityId,
-                    limit,
-                    offset
+                    conversationId as EntityId
                 );
 
                 res.json({
@@ -183,8 +181,6 @@ export const registerAdvisorConversationRoutes: RouteRegistrar = (context: Route
                         content: msg.content,
                         createdAt: msg.createdAt,
                     })),
-                    limit,
-                    offset,
                 });
             } catch (error) {
                 next(error);
@@ -259,7 +255,7 @@ export const registerAdvisorConversationRoutes: RouteRegistrar = (context: Route
                 const planningIntents = [
                     AdvisorWorkflow.BUDGET_REVISE,
                     AdvisorWorkflow.BUDGET_CREATE,
-                    AdvisorWorkflow.SCENARIO_ANALYSIS,
+                    AdvisorWorkflow.BUDGET_SCENARIO,
                 ];
 
                 if (planningIntents.includes(classifiedIntent.intent as any)) {
@@ -267,27 +263,12 @@ export const registerAdvisorConversationRoutes: RouteRegistrar = (context: Route
                     const extractedPlanning = WorkflowStateManager.extractPlanningData(content);
 
                     if (extractedPlanning.activities.length > 0 || extractedPlanning.constraints.length > 0) {
-                        // Get or create workflow for this conversation
-                        let workflow = await conversationRepo.findById(conversationId as EntityId)
-                            .then(async (conv) => {
-                                if (conv?.currentWorkflow && conv.currentWorkflow !== AdvisorWorkflow.GENERAL_FINANCIAL_QUESTION) {
-                                    // Try to find existing workflow
-                                    // For now, we'll need to find it by conversation
-                                    // This would need a proper repository method
-                                    return null;
-                                }
-                                return null;
-                            })
-                            .catch(() => null);
-
-                        // If no workflow exists, create one
-                        if (!workflow) {
-                            workflow = await advisorService.startWorkflow(
-                                householdId as EntityId,
-                                classifiedIntent.intent as AdvisorWorkflow,
-                                conversationId as EntityId
-                            );
-                        }
+                        // Create workflow for this planning conversation
+                        const workflow = await advisorService.startWorkflow(
+                            householdId as EntityId,
+                            classifiedIntent.intent as AdvisorWorkflow,
+                            conversationId as EntityId
+                        );
 
                         // Update workflow with extracted planning data
                         const updated = await contextService.updateWorkflowStateFromMessage(
@@ -295,11 +276,14 @@ export const registerAdvisorConversationRoutes: RouteRegistrar = (context: Route
                             content
                         );
 
+                        // Merge updated changes back into workflow for description
+                        const mergedWorkflow = { ...workflow, ...updated };
+
                         // Store updated workflow in database
                         await workflowRepo.update(workflow.id, updated);
 
                         // Get human-readable description
-                        workflowDescription = WorkflowStateManager.describeWorkflowState(updated);
+                        workflowDescription = WorkflowStateManager.describeWorkflowState(mergedWorkflow as any);
                     }
                 }
 
