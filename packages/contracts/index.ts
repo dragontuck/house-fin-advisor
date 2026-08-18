@@ -1753,3 +1753,6 @@ export interface ApproveWorkflowResponse {
     permanentId?: EntityId;                          // If plan was saved to persistent state
     nextMessage: string;                             // Advisor's confirmation
 }
+
+// ── AI Tool Contracts ──────────────────────────────────────────────────────────
+export * from "./ai-tools";

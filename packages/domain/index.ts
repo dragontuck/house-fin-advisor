@@ -435,4 +435,29 @@ export {
     createAdvisorService,
 } from "./advisor-service";
 
+// ── Slice 4: AI Tool Contracts ──────────────────────────────────────────────────
+// Re-export from contracts to make available to API layer
+export {
+    ToolAuthorizationLevel,
+    ToolDataClassification,
+    AIToolDefinition,
+    AIToolRegistry,
+    GetFinancialSnapshotTool,
+    GetCashFlowTool,
+    GetCurrentBudgetTool,
+    GetBudgetStatusTool,
+    GetHistoricalBudgetPerformanceTool,
+    GetGoalStatusTool,
+    GetDebtSummaryTool,
+    GetAttentionItemsTool,
+    GetRecurringFinancialItemsTool,
+    SimulatePurchaseTool,
+    SimulateBudgetChangeTool,
+    CreateInitialBudgetTool,
+    AnalyzeBudgetVarianceTool,
+    PlanNextMonthBudgetTool,
+    type AIToolInput,
+    type AIToolOutput,
+} from "@house-fin/contracts";
+
 
