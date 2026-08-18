@@ -460,4 +460,15 @@ export {
     type AIToolOutput,
 } from "@house-fin/contracts";
 
+// ── Slice 4: Intent Classification ──────────────────────────────────────────────
+// Classify user intent and workflow type
+export {
+    IntentCategory,
+    type ClassifiedIntent,
+    type IntentSignals,
+    type AdvisorIntentClassifier,
+    RuleBasedIntentClassifier,
+    createIntentClassifier,
+} from "./advisor-intent-classifier";
+
 

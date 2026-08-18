@@ -433,21 +433,6 @@ test.describe("Household with goal falling behind", () => {
         await expect(card).toContainText("Required monthly");
     });
 });
-{ name: "Checking Account", balance: 7200, type: "CHECKING" },
-{ name: "Savings Account", balance: 12000, type: "SAVINGS" },
-        ],
-retirement: [
-    { name: "401k", balance: 325000, type: "RETIREMENT" },
-    { name: "IRA", balance: 85000, type: "RETIREMENT" },
-],
-    investments: [],
-        debt: [
-            { name: "Home Mortgage", balance: 240000, type: "MORTGAGE" },
-        ],
-    },
-statusMessage:
-"Your household is in good financial shape. Keep maintaining this momentum!",
-};
 
 test.describe("Financial Pulse Dashboard", () => {
     test.beforeEach(async ({ page }) => {
