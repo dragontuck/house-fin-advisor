@@ -753,7 +753,7 @@ function generateVarianceRecommendations(trends: VarianceTrend[]): string[] {
     if (overBudgetCategories.length > 0) {
         recommendations.push(
             `Categories consistently over budget: ${overBudgetCategories.map((c) => c.category).join(", ")}. ` +
-                `Consider increasing allocations or tracking spending more closely.`
+            `Consider increasing allocations or tracking spending more closely.`
         );
     }
 
@@ -761,7 +761,7 @@ function generateVarianceRecommendations(trends: VarianceTrend[]): string[] {
     if (underBudgetCategories.length > 0) {
         recommendations.push(
             `Categories consistently under budget: ${underBudgetCategories.map((c) => c.category).join(", ")}. ` +
-                `Budget allocations may be too conservative.`
+            `Budget allocations may be too conservative.`
         );
     }
 
