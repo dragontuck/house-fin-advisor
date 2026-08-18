@@ -10,6 +10,7 @@ import {
     FinancialContextBuilder,
     FinancialContext,
 } from "@house-fin/ai";
+import { WorkflowStateManager } from "./workflow-state-manager";
 
 /**
  * Service for managing advisor context throughout a conversation
@@ -224,6 +225,59 @@ export class AdvisorContextService {
         }
 
         return available.length > 0 ? available.join(", ") : "no financial data";
+    }
+
+    /**
+     * Update workflow state based on user message in multi-turn conversation
+     *
+     * Extracts planning information (activities, constraints) from user message
+     * and updates the workflow state to accumulate planning context across turns.
+     *
+     * Example:
+     *   User Turn 1: "Help me revise next month's budget."
+     *     → Creates workflow with workflowType: BUDGET_REVISE
+     *
+     *   User Turn 2: "We have a $1,200 car repair, a $900 birthday celebration, and a $1,500 trip."
+     *     → Extracts 3 activities, adds to workflow state
+     *
+     *   User Turn 3: "I don't want to reduce vacation savings."
+     *     → Extracts constraint, adds to workflow state
+     */
+    updateWorkflowStateFromMessage(
+        workflow: WorkflowState,
+        userMessage: string
+    ): Partial<WorkflowState> {
+        // Extract planning data from message
+        const extracted = WorkflowStateManager.extractPlanningData(userMessage);
+
+        // Merge with existing workflow state
+        const updated = WorkflowStateManager.updateWorkflowState(workflow, extracted);
+
+        return updated;
+    }
+
+    /**
+     * Get human-readable summary of current workflow planning state
+     *
+     * Returns a description the assistant can use in responses to acknowledge
+     * what it has understood about the planning context.
+     *
+     * Example output:
+     *   "Budget planning mode: Planning period: August 2026. Known activities: Car repair ($1,200),
+     *    Birthday celebration ($900), Trip ($1,500). Total: $3,600. Constraints: Keep vacation
+     *    savings unchanged."
+     */
+    describeWorkflowPlanning(workflow: WorkflowState): string {
+        return WorkflowStateManager.describeWorkflowState(workflow);
+    }
+
+    /**
+     * Calculate total cost of all known activities in workflow
+     *
+     * Useful for showing user impact of planned activities
+     */
+    calculateTotalActivityCost(workflow: WorkflowState): number {
+        return WorkflowStateManager.calculateTotalActivityCost(workflow.knownActivities);
     }
 }
 

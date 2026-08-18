@@ -5,8 +5,8 @@
 
 import { Request, Response, NextFunction } from "express";
 import { RouteContext, RouteRegistrar } from "./types";
-import { EntityId, AdvisorMessageRole, AdvisorWorkflow, IntentCategory } from "@house-fin/contracts";
-import { createIntentClassifier } from "@house-fin/domain";
+import { EntityId, AdvisorMessageRole, AdvisorWorkflow, IntentCategory, WorkflowStatus } from "@house-fin/contracts";
+import { createIntentClassifier, WorkflowStateManager } from "@house-fin/domain";
 
 /**
  * Tool availability by intent category
@@ -78,7 +78,7 @@ class ApiError extends Error {
  * Register advisor conversation routes
  */
 export const registerAdvisorConversationRoutes: RouteRegistrar = (context: RouteContext) => {
-    const { app, advisorService, conversationRepo } = context;
+    const { app, advisorService, conversationRepo, contextService, workflowRepo } = context;
     const intentClassifier = createIntentClassifier();
 
     /**
@@ -194,7 +194,7 @@ export const registerAdvisorConversationRoutes: RouteRegistrar = (context: Route
 
     /**
      * POST /conversations/:conversationId/messages
-     * Add message to conversation with intent classification and tool routing
+     * Add message to conversation with intent classification, tool routing, and workflow state management
      */
     app.post(
         "/conversations/:conversationId/messages",
@@ -254,6 +254,55 @@ export const registerAdvisorConversationRoutes: RouteRegistrar = (context: Route
                     });
                 }
 
+                // Handle workflow state for planning-related intents
+                let workflowDescription: string | undefined;
+                const planningIntents = [
+                    AdvisorWorkflow.BUDGET_REVISE,
+                    AdvisorWorkflow.BUDGET_CREATE,
+                    AdvisorWorkflow.SCENARIO_ANALYSIS,
+                ];
+                
+                if (planningIntents.includes(classifiedIntent.intent as any)) {
+                    // Extract workflow state from user message
+                    const extractedPlanning = WorkflowStateManager.extractPlanningData(content);
+                    
+                    if (extractedPlanning.activities.length > 0 || extractedPlanning.constraints.length > 0) {
+                        // Get or create workflow for this conversation
+                        let workflow = await conversationRepo.findById(conversationId as EntityId)
+                            .then(async (conv) => {
+                                if (conv?.currentWorkflow && conv.currentWorkflow !== AdvisorWorkflow.GENERAL_FINANCIAL_QUESTION) {
+                                    // Try to find existing workflow
+                                    // For now, we'll need to find it by conversation
+                                    // This would need a proper repository method
+                                    return null;
+                                }
+                                return null;
+                            })
+                            .catch(() => null);
+                        
+                        // If no workflow exists, create one
+                        if (!workflow) {
+                            workflow = await advisorService.startWorkflow(
+                                householdId as EntityId,
+                                classifiedIntent.intent as AdvisorWorkflow,
+                                conversationId as EntityId
+                            );
+                        }
+                        
+                        // Update workflow with extracted planning data
+                        const updated = await contextService.updateWorkflowStateFromMessage(
+                            workflow,
+                            content
+                        );
+                        
+                        // Store updated workflow in database
+                        await workflowRepo.update(workflow.id, updated);
+                        
+                        // Get human-readable description
+                        workflowDescription = WorkflowStateManager.describeWorkflowState(updated);
+                    }
+                }
+
                 // Determine available tools based on intent classification
                 const availableTools = getAvailableTools(classifiedIntent.category);
                 const toolDescriptions = availableTools.map((tool) => ({
@@ -272,6 +321,7 @@ export const registerAdvisorConversationRoutes: RouteRegistrar = (context: Route
                         confidence: classifiedIntent.confidence,
                         reasoning: classifiedIntent.reasoning,
                         availableTools: availableTools,
+                        workflowDescription,
                     },
                 });
 
@@ -292,6 +342,7 @@ export const registerAdvisorConversationRoutes: RouteRegistrar = (context: Route
                         reasoning: classifiedIntent.reasoning,
                     },
                     availableTools: toolDescriptions,
+                    workflowDescription,
                     out_of_scope: false,
                 });
             } catch (error) {

@@ -440,6 +440,12 @@ export {
     createAdvisorContextService,
 } from "./advisor-context-service";
 
+export {
+    WorkflowStateManager,
+    createWorkflowStateManager,
+    type PlanningExtractionResult,
+} from "./workflow-state-manager";
+
 // ── Slice 4: AI Tool Contracts ──────────────────────────────────────────────────
 // Re-export from contracts to make available to API layer
 export {

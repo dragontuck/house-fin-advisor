@@ -10,7 +10,11 @@ import {
     AdvisorMessage,
     AdvisorMessageRole,
     WorkflowState,
+    WorkflowStatus,
     ToolExecution,
+    KnownActivity,
+    ProposedChange,
+    WorkflowAssumption,
 } from "@house-fin/contracts";
 import {
     AdvisorConversationRepository,
@@ -191,15 +195,26 @@ export class PgWorkflowStateRepository implements WorkflowStateRepository {
     ): Promise<WorkflowState> {
         const result = await query(
             `INSERT INTO finhouse.advisor_workflow_states 
-             (household_id, conversation_id, workflow_type, status, linked_financial_snapshot_id)
-             VALUES ($1, $2, $3, $4, $5)
-             RETURNING id, household_id, conversation_id, workflow_type, status, created_at, updated_at`,
+             (household_id, conversation_id, workflow_type, status, planning_period, 
+              current_scenario, known_activities, proposed_changes, assumptions, pending_questions,
+              linked_financial_snapshot_id, linked_snapshot_version)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+             RETURNING id, household_id, conversation_id, workflow_type, status, planning_period,
+                       current_scenario, known_activities, proposed_changes, assumptions, pending_questions,
+                       linked_financial_snapshot_id, linked_snapshot_version, created_at, updated_at, completed_at`,
             [
                 req.householdId,
                 req.conversationId || null,
                 req.workflowType,
                 req.status,
-                null,
+                req.planningPeriod ? JSON.stringify(req.planningPeriod) : null,
+                req.currentScenario ? JSON.stringify(req.currentScenario) : null,
+                req.knownActivities ? JSON.stringify(req.knownActivities) : null,
+                req.proposedChanges ? JSON.stringify(req.proposedChanges) : null,
+                req.assumptions ? JSON.stringify(req.assumptions) : null,
+                req.pendingQuestions ? JSON.stringify(req.pendingQuestions) : null,
+                req.linkedFinancialSnapshotId || null,
+                req.linkedSnapshotVersion || null,
             ]
         );
         return this.rowToWorkflow(result.rows[0]);
@@ -233,6 +248,30 @@ export class PgWorkflowStateRepository implements WorkflowStateRepository {
             updates.push(`status = $${p++}`);
             values.push(changes.status);
         }
+        if (changes.planningPeriod !== undefined) {
+            updates.push(`planning_period = $${p++}`);
+            values.push(changes.planningPeriod ? JSON.stringify(changes.planningPeriod) : null);
+        }
+        if (changes.currentScenario !== undefined) {
+            updates.push(`current_scenario = $${p++}`);
+            values.push(changes.currentScenario ? JSON.stringify(changes.currentScenario) : null);
+        }
+        if (changes.knownActivities !== undefined) {
+            updates.push(`known_activities = $${p++}`);
+            values.push(changes.knownActivities ? JSON.stringify(changes.knownActivities) : null);
+        }
+        if (changes.proposedChanges !== undefined) {
+            updates.push(`proposed_changes = $${p++}`);
+            values.push(changes.proposedChanges ? JSON.stringify(changes.proposedChanges) : null);
+        }
+        if (changes.assumptions !== undefined) {
+            updates.push(`assumptions = $${p++}`);
+            values.push(changes.assumptions ? JSON.stringify(changes.assumptions) : null);
+        }
+        if (changes.pendingQuestions !== undefined) {
+            updates.push(`pending_questions = $${p++}`);
+            values.push(changes.pendingQuestions ? JSON.stringify(changes.pendingQuestions) : null);
+        }
         if (changes.completedAt !== undefined) {
             updates.push(`completed_at = $${p++}`);
             values.push(changes.completedAt);
@@ -263,9 +302,17 @@ export class PgWorkflowStateRepository implements WorkflowStateRepository {
         return {
             id: row.id as EntityId,
             householdId: row.household_id as EntityId,
-            conversationId: (row.conversation_id as EntityId | null) || null,
+            conversationId: (row.conversation_id as EntityId | null) || undefined,
             workflowType: row.workflow_type as any,
-            status: row.status as any,
+            planningPeriod: row.planning_period ? JSON.parse(row.planning_period as string) : undefined,
+            currentScenario: row.current_scenario ? JSON.parse(row.current_scenario as string) : undefined,
+            knownActivities: row.known_activities ? JSON.parse(row.known_activities as string) : undefined,
+            proposedChanges: row.proposed_changes ? JSON.parse(row.proposed_changes as string) : undefined,
+            assumptions: row.assumptions ? JSON.parse(row.assumptions as string) : undefined,
+            pendingQuestions: row.pending_questions ? JSON.parse(row.pending_questions as string) : undefined,
+            status: row.status as WorkflowStatus,
+            linkedFinancialSnapshotId: (row.linked_financial_snapshot_id as EntityId | null) || undefined,
+            linkedSnapshotVersion: row.linked_snapshot_version as number | undefined,
             createdAt: row.created_at as Date,
             updatedAt: row.updated_at as Date,
             completedAt: row.completed_at as Date | undefined,

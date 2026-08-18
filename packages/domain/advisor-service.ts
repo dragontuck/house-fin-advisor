@@ -108,13 +108,10 @@ export class AdvisorService {
         req: CreateAdvisorConversationRequest
     ): Promise<AdvisorConversation> {
         const conversation = await this.conversationRepo.create({
-            id: undefined as any,
             householdId: req.householdId,
             memberId: req.memberId,
             title: req.title || "Financial Planning Discussion",
             status: "ACTIVE",
-            createdAt: new Date(),
-            updatedAt: new Date(),
             messageCount: 0,
             lastMessageAt: new Date(),
         });
@@ -122,11 +119,9 @@ export class AdvisorService {
         // If initial message provided, add it
         if (req.initialMessage) {
             await this.messageRepo.create({
-                id: undefined as any,
                 conversationId: conversation.id,
                 role: AdvisorMessageRole.USER,
                 content: req.initialMessage,
-                createdAt: new Date(),
             });
 
             // Increment message count
@@ -145,12 +140,10 @@ export class AdvisorService {
         req: AddAdvisorMessageRequest
     ): Promise<AdvisorMessage> {
         const message = await this.messageRepo.create({
-            id: undefined as any,
             conversationId: req.conversationId,
             role: req.role,
             content: req.content,
             metadata: req.metadata,
-            createdAt: new Date(),
         });
 
         // Update conversation metadata
@@ -178,7 +171,6 @@ export class AdvisorService {
         correlationId: EntityId
     ): Promise<ToolExecution> {
         return this.toolExecutionRepo.create({
-            id: undefined as any,
             conversationId,
             messageId,
             toolName,
@@ -188,7 +180,6 @@ export class AdvisorService {
             durationMs,
             executionVersion: 1,
             correlationId,
-            executedAt: new Date(),
         });
     }
 
@@ -201,13 +192,10 @@ export class AdvisorService {
         conversationId?: EntityId
     ): Promise<WorkflowState> {
         return this.workflowRepo.create({
-            id: undefined as any,
             householdId,
-            conversationId: conversationId || null,
+            conversationId,
             workflowType,
             status: WorkflowStatus.ACTIVE,
-            createdAt: new Date(),
-            updatedAt: new Date(),
         });
     }
 
@@ -218,7 +206,6 @@ export class AdvisorService {
         workflowId: EntityId,
         changes: Partial<WorkflowState>
     ): Promise<WorkflowState> {
-        changes.updatedAt = new Date();
         return this.workflowRepo.update(workflowId, changes);
     }
 
@@ -241,12 +228,10 @@ export class AdvisorService {
 
         // Add system message to conversation
         await this.messageRepo.create({
-            id: undefined as any,
             conversationId,
             role: AdvisorMessageRole.SYSTEM,
             content: `Workflow ${workflow.workflowType} approved.`,
             metadata: { workflowId },
-            createdAt: new Date(),
         });
 
         return updated;
@@ -271,12 +256,10 @@ export class AdvisorService {
 
         // Add system message
         await this.messageRepo.create({
-            id: undefined as any,
             conversationId,
             role: AdvisorMessageRole.SYSTEM,
             content: `Workflow ${workflow.workflowType} cancelled.`,
             metadata: { workflowId },
-            createdAt: new Date(),
         });
 
         return updated;
