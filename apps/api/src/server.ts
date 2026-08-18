@@ -51,6 +51,7 @@ import {
     createHealthEngine,
     buildSnapshotHistory,
     buildSurplusExplanationText,
+    AdvisorService,
 } from "@house-fin/domain";
 import {
     PgHouseholdRepository,
@@ -65,6 +66,10 @@ import {
     PgCashFlowRepository,
     PgSavingsGoalRepository,
     PgDebtRepository,
+    PgAdvisorConversationRepository,
+    PgAdvisorMessageRepository,
+    PgWorkflowStateRepository,
+    PgToolExecutionRepository,
 } from "./db/repositories";
 import { householdContextMiddleware, verifyHouseholdContext } from "./middleware/household-context";
 import { uploadRateLimiter } from "./middleware/rate-limit";
@@ -151,6 +156,12 @@ export function createServer(): Express {
     const reviewItemRepo = new PgReviewItemRepository();
     const postingRepo = new PgPostingRepository();
 
+    // Advisor conversation repositories
+    const conversationRepo = new PgAdvisorConversationRepository();
+    const messageRepo = new PgAdvisorMessageRepository();
+    const workflowRepo = new PgWorkflowStateRepository();
+    const toolExecutionRepo = new PgToolExecutionRepository();
+
     const budgetRepo = new PgBudgetRepository();
     const budgetService = createBudgetService();
     const cashFlowRepo = new PgCashFlowRepository();
@@ -177,6 +188,14 @@ export function createServer(): Express {
         snapshotCalculator,
         reviewQueueService,
         documentRepo
+    );
+
+    // Advisor service for conversation orchestration
+    const advisorService = new AdvisorService(
+        conversationRepo,
+        messageRepo,
+        workflowRepo,
+        toolExecutionRepo
     );
 
     // Initialize object storage adapter

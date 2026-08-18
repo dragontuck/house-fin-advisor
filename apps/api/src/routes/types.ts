@@ -7,6 +7,7 @@ import {
     HouseholdService,
     ReviewQueueService,
     TransactionPostingService,
+    AdvisorService,
 } from "@house-fin/domain";
 import {
     PgHouseholdRepository,
@@ -21,6 +22,10 @@ import {
     PgCashFlowRepository,
     PgSavingsGoalRepository,
     PgDebtRepository,
+    PgAdvisorConversationRepository,
+    PgAdvisorMessageRepository,
+    PgWorkflowStateRepository,
+    PgToolExecutionRepository,
 } from "../db/repositories";
 import { ObjectStorageAdapter } from "../storage/object-storage";
 
@@ -34,6 +39,7 @@ export interface RouteContext {
     householdService: HouseholdService;
     reviewQueueService: ReviewQueueService;
     postingService: TransactionPostingService;
+    advisorService: AdvisorService;
     // Repositories
     householdRepo: PgHouseholdRepository;
     memberRepo: PgHouseholdMemberRepository;
@@ -47,6 +53,10 @@ export interface RouteContext {
     cashFlowRepo: PgCashFlowRepository;
     savingsGoalRepo: PgSavingsGoalRepository;
     debtRepo: PgDebtRepository;
+    conversationRepo: PgAdvisorConversationRepository;
+    messageRepo: PgAdvisorMessageRepository;
+    workflowRepo: PgWorkflowStateRepository;
+    toolExecutionRepo: PgToolExecutionRepository;
     // Storage
     storageAdapter: ObjectStorageAdapter;
 }

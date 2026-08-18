@@ -14,21 +14,23 @@ import { registerGoalsRoutes } from "./goals";
 import { registerDebtRoutes } from "./debt";
 import { registerHealthRoutes } from "./health";
 import { registerSnapshotRoutes } from "./snapshots";
+import { registerAdvisorConversationRoutes } from "./advisor-conversations";
 
 /**
  * All route registrars to be called in order
- * Order: Core → Documents → Posting → Financial Analysis → Health Intelligence
+ * Order: Core → Documents → Posting → Financial Analysis → Health Intelligence → Advisor Conversations
  */
 const routeRegistrars: RouteRegistrar[] = [
-    registerCoreRoutes,           // Household, accounts, pulse
-    registerDocumentRoutes,       // Document upload, status, listing
-    registerPostingRoutes,        // Statement posting, categorization
-    registerBudgetRoutes,         // Budget CRUD and variance
-    registerCashFlowRoutes,       // Cash flow analysis
-    registerGoalsRoutes,          // Savings goals and emergency fund
-    registerDebtRoutes,           // Debt intelligence and accounts
-    registerSnapshotRoutes,       // Snapshots and historical data
-    registerHealthRoutes,         // Health analysis and attention items
+    registerCoreRoutes,                    // Household, accounts, pulse
+    registerDocumentRoutes,                // Document upload, status, listing
+    registerPostingRoutes,                 // Statement posting, categorization
+    registerBudgetRoutes,                  // Budget CRUD and variance
+    registerCashFlowRoutes,                // Cash flow analysis
+    registerGoalsRoutes,                   // Savings goals and emergency fund
+    registerDebtRoutes,                    // Debt intelligence and accounts
+    registerSnapshotRoutes,                // Snapshots and historical data
+    registerHealthRoutes,                  // Health analysis and attention items
+    registerAdvisorConversationRoutes,     // Conversational advisor with intent classification
 ];
 
 /**
@@ -55,4 +57,5 @@ export {
     registerDebtRoutes,
     registerHealthRoutes,
     registerSnapshotRoutes,
+    registerAdvisorConversationRoutes,
 };

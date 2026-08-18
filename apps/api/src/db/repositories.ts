@@ -27,6 +27,11 @@ import {
     ReviewSeverity,
     ReviewStatus,
     ReviewResolution,
+    AdvisorConversation,
+    AdvisorMessage,
+    AdvisorMessageRole,
+    WorkflowState,
+    ToolExecution,
 } from "@house-fin/contracts";
 import {
     HouseholdRepository,
@@ -42,6 +47,10 @@ import {
     ICashFlowRepository,
     ISavingsGoalRepository,
     IDebtRepository,
+    AdvisorConversationRepository,
+    AdvisorMessageRepository,
+    WorkflowStateRepository,
+    ToolExecutionRepository,
 } from "@house-fin/domain";
 import {
     PostedTransaction,
@@ -1878,3 +1887,10 @@ export class PgDebtRepository implements IDebtRepository {
         };
     }
 }
+// Re-export advisor repositories from separate file
+export {
+    PgAdvisorConversationRepository,
+    PgAdvisorMessageRepository,
+    PgWorkflowStateRepository,
+    PgToolExecutionRepository,
+} from "./advisor-repositories";
