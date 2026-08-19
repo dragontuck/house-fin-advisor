@@ -60,3 +60,31 @@ export {
     NoOpTelemetryHandler,
     createTelemetryHandler,
 } from "./telemetry-handler";
+
+// AI Orchestration Exports
+export {
+    AIToolPlanner,
+    type PlannedToolCall,
+    type ToolExecutionPlan,
+    getToolPlanner,
+    setToolPlanner,
+} from "./ai-tool-planner";
+
+export {
+    AIToolExecutor,
+    type ToolExecutionResult,
+    type ToolExecutionContext,
+    type AuthorizationCheckResult,
+    type ToolResolver,
+    getToolExecutor,
+    setToolExecutor,
+} from "./ai-tool-executor";
+
+export {
+    AIOrchestrator,
+    type OrchestratorRequest,
+    type OrchestratorResponse,
+    createAIOrchestrator,
+    getAIOrchestrator,
+    initializeAIOrchestrator,
+} from "./ai-orchestrator";

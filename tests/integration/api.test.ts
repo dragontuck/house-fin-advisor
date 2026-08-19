@@ -301,6 +301,97 @@ jest.mock("../../apps/api/src/db/repositories", () => {
                 throw new Error("Settings not found");
             }
         },
+
+        // Additional repositories required by server.ts
+        PgFinancialDocumentRepository: class {
+            async create(doc: any) { return { id: EntityId("doc"), ...doc }; }
+            async findById(id: string) { return null; }
+            async findByHouseholdId(householdId: string) { return []; }
+            async findByChecksum(householdId: string, checksum: string) { return null; }
+            async update(id: string, doc: any) { return { id, ...doc }; }
+            async updateStatus(id: string, status: string) { return { id, status }; }
+            async softDelete(id: string) { }
+            async getProcessingHistory(documentId: string) { return []; }
+        },
+
+        PgReviewItemRepository: class {
+            async createReviewItem(item: any) { return { id: EntityId("review"), ...item }; }
+            async getReviewItem(id: string) { return null; }
+            async updateReviewItem(item: any) { return item; }
+            async listReviewItems(householdId: string) { return []; }
+            async createResolution(resolution: any) { return { ...resolution }; }
+            async getResolution(reviewItemId: string) { return null; }
+        },
+
+        PgPostingRepository: class {
+            async getAutoPostConfig(householdId: string) { return null; }
+            async createOrUpdateAutoPostConfig(config: any) { return config; }
+            async createPostedTransaction(txn: any) { return { ...txn, id: EntityId("txn") }; }
+            async createPostedTransactions(txns: any[]) { return txns; }
+            async getPostedTransaction(id: string) { return null; }
+            async listPostedTransactions(householdId: string) { return []; }
+            async createPostingAudit(audit: any) { return audit; }
+            async updatePostingAudit(audit: any) { return audit; }
+            async getPostingAudit(correlationId: string) { return null; }
+            async getPostingAuditByIdempotencyKey(key: string) { return null; }
+        },
+
+        PgBudgetRepository: class {
+            async create(budget: any) { return { id: EntityId("budget"), ...budget }; }
+            async findById(id: string) { return null; }
+            async findByHouseholdAndPeriod(householdId: string, year: number, month: number) { return []; }
+            async findByCategory(householdId: string, year: number, month: number, category: string) { return null; }
+            async update(id: string, updates: any) { return { id, ...updates }; }
+            async delete(id: string, householdId: string) { }
+            async getTransactionsForPeriod(householdId: string, year: number, month: number) { return []; }
+            async categorizeTransaction(transactionId: string, householdId: string, category: string) { }
+        },
+
+        PgCashFlowRepository: class {
+            async getTransactionsForRange(householdId: string, fromDate: Date, toDate: Date) { return []; }
+            async getLiquidCashCents(householdId: string) { return 0; }
+            async getHouseholdSettings(householdId: string) { return null; }
+            async getBudgetsForPeriod(householdId: string, year: number, month: number) { return []; }
+        },
+
+        PgSavingsGoalRepository: class {
+            async create(goal: any) { return { id: EntityId("goal"), ...goal }; }
+            async findById(id: string) { return null; }
+            async findByHouseholdId(householdId: string) { return []; }
+            async findEmergencyFundGoal(householdId: string) { return null; }
+            async update(id: string, updates: any) { return { id, ...updates }; }
+            async delete(id: string, householdId: string) { }
+        },
+
+        PgDebtRepository: class {
+            async findActiveAccountsByHousehold(householdId: string) { return []; }
+            async updateDebtDetails(id: string, details: any) { return { id, ...details }; }
+        },
+
+        PgAdvisorConversationRepository: class {
+            async create(conv: any) { return { id: EntityId("conv"), ...conv }; }
+            async findById(id: string) { return null; }
+            async findByHouseholdId(householdId: string) { return []; }
+            async update(id: string, updates: any) { return { id, ...updates }; }
+        },
+
+        PgAdvisorMessageRepository: class {
+            async create(msg: any) { return { id: EntityId("msg"), ...msg }; }
+            async findByConversationId(conversationId: string) { return []; }
+            async findById(id: string) { return null; }
+        },
+
+        PgWorkflowStateRepository: class {
+            async save(state: any) { return state; }
+            async findById(id: string) { return null; }
+            async findByConversationId(conversationId: string) { return null; }
+        },
+
+        PgToolExecutionRepository: class {
+            async record(execution: any) { return { id: EntityId("exec"), ...execution }; }
+            async findByMessageId(messageId: string) { return []; }
+            async findByConversationId(conversationId: string) { return []; }
+        },
     };
 });
 

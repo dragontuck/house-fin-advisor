@@ -52,7 +52,22 @@ import {
     buildSnapshotHistory,
     buildSurplusExplanationText,
     AdvisorService,
+    AdvisorContextService,
+    createAdvisorContextService,
 } from "@house-fin/domain";
+import {
+    AIToolPlanner,
+    AIToolExecutor,
+    AIOrchestrator,
+    FinancialContextBuilder,
+    createFinancialContextBuilder,
+    createDefaultLLMProvider,
+    initializeAIOrchestrator,
+} from "@house-fin/ai";
+import {
+    PrivacyGateway,
+    setPrivacyGateway,
+} from "@house-fin/security";
 import {
     PgHouseholdRepository,
     PgHouseholdMemberRepository,
@@ -207,6 +222,231 @@ export function createServer(): Express {
             timestamp: new Date().toISOString()
         });
     });
+
+    // ==================== AI ORCHESTRATOR INITIALIZATION ====================
+
+    // Initialize financial context builder
+    const contextBuilder = createFinancialContextBuilder({
+        budgetRepo: {
+            findByHouseholdAndPeriod: (householdId: EntityId, year: number, month: number) =>
+                budgetRepo.findByHouseholdAndPeriod(householdId, year, month),
+            findByHouseholdIdRange: async (householdId: EntityId, startYear: number, startMonth: number, endYear: number, endMonth: number) => {
+                const results = [];
+                for (let y = startYear; y <= endYear; y++) {
+                    for (let m = startMonth; m <= (y === endYear ? endMonth : 12); m++) {
+                        const budgets = await budgetRepo.findByHouseholdAndPeriod(householdId, y, m);
+                        results.push(...budgets);
+                    }
+                }
+                return results;
+            },
+        },
+        transactionRepo: {
+            findByHouseholdAndPeriod: async (householdId: EntityId, year: number, month: number) => {
+                const fromDate = new Date(year, month - 1, 1);
+                const toDate = new Date(year, month, 1);
+                const transactions = await cashFlowRepo.getTransactionsForRange(householdId, fromDate, toDate);
+                return transactions.map(t => ({
+                    id: t.id,
+                    category: t.category,
+                    amountCents: t.amountCents,
+                    transactionDate: t.transactionDate,
+                }));
+            },
+            findByHouseholdDateRange: async (householdId: EntityId, startDate: Date, endDate: Date) => {
+                const transactions = await cashFlowRepo.getTransactionsForRange(householdId, startDate, endDate);
+                return transactions.map(t => ({
+                    id: t.id,
+                    category: t.category,
+                    amountCents: t.amountCents,
+                    transactionDate: t.transactionDate,
+                }));
+            },
+        },
+        settingsRepo: {
+            findByHouseholdId: (householdId: EntityId) => {
+                // Placeholder - would need to implement actual settings repo
+                return Promise.resolve(null);
+            },
+        },
+        recurringPatternsRepo: {
+            findByHouseholdId: async (householdId: EntityId) => {
+                // Placeholder - would need to implement recurring patterns detection
+                return [];
+            },
+        },
+        snapshotRepo: {
+            findLatest: (householdId: EntityId) => snapshotRepo.findLatestByHouseholdId(householdId),
+        },
+        debtRepo: {
+            findByHouseholdId: async (householdId: EntityId) => {
+                // Placeholder - would need to implement debt analysis
+                return null;
+            },
+        },
+        goalsRepo: {
+            findByHouseholdId: (householdId: EntityId) => savingsGoalRepo.findByHouseholdId(householdId),
+        },
+    });
+
+    // Initialize advisor context service for sanitization
+    const contextService = createAdvisorContextService(contextBuilder);
+
+    // Initialize privacy gateway
+    const privacyGateway = new PrivacyGateway();
+    setPrivacyGateway(privacyGateway);
+
+    // Initialize LLM provider - only if API key is configured
+    let llmProvider: any = null;
+    try {
+        if (process.env.ANTHROPIC_API_KEY) {
+            llmProvider = createDefaultLLMProvider();
+        } else {
+            // For testing environments without API key, use a no-op provider
+            console.warn("[AI_ORCHESTRATOR] No ANTHROPIC_API_KEY - AI features will be limited");
+            llmProvider = {
+                getName: () => "noop",
+                getConfig: () => ({}),
+                getMaxContextTokens: () => 100000,
+                validateRequest: () => true,
+                generateResponse: async () => ({
+                    correlationId: "",
+                    message: "AI features not available",
+                    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+                }),
+            };
+        }
+    } catch (error) {
+        console.error("[AI_ORCHESTRATOR_INIT] Failed to initialize LLM provider", error);
+        throw error;
+    }
+
+    // Initialize AI tool planner
+    const toolPlanner = new AIToolPlanner();
+
+    // Initialize AI tool executor
+    const toolExecutor = new AIToolExecutor();
+
+    // Register tool handlers with executor
+    // These are placeholder implementations - real implementations should fetch from repositories
+    toolExecutor.registerTool("get_financial_snapshot", async (params: Record<string, unknown>, context) => {
+        const householdId = context.householdId;
+        const snapshot = await snapshotRepo.findLatestByHouseholdId(householdId);
+        return snapshot ? { snapshot } : { error: "No snapshot found" };
+    });
+
+    toolExecutor.registerTool("get_cash_flow", async (params: Record<string, unknown>, context) => {
+        const householdId = context.householdId;
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const transactions = await cashFlowRepo.getTransactionsForRange(householdId, thirtyDaysAgo, now);
+        return { transactions };
+    });
+
+    toolExecutor.registerTool("get_current_budget", async (params: Record<string, unknown>, context) => {
+        const householdId = context.householdId;
+        const now = new Date();
+        const budgets = await budgetRepo.findByHouseholdAndPeriod(householdId, now.getFullYear(), now.getMonth() + 1);
+        return budgets.length > 0 ? { budgets } : { error: "No current budget found" };
+    });
+
+    toolExecutor.registerTool("get_budget_status", async (params: Record<string, unknown>, context) => {
+        const householdId = context.householdId;
+        const now = new Date();
+        const budgets = await budgetRepo.findByHouseholdAndPeriod(householdId, now.getFullYear(), now.getMonth() + 1);
+
+        const transactions = await cashFlowRepo.getTransactionsForRange(
+            householdId,
+            new Date(now.getFullYear(), now.getMonth(), 1),
+            new Date(now.getFullYear(), now.getMonth() + 1, 1)
+        );
+
+        return {
+            status: "ok",
+            budgets,
+            transactions,
+        };
+    });
+
+    toolExecutor.registerTool("get_historical_budget_performance", async (params: Record<string, unknown>, context) => {
+        const householdId = context.householdId;
+        const now = new Date();
+        // Get budgets for the last 12 months
+        const history = [];
+        for (let i = 0; i < 12; i++) {
+            const month = now.getMonth() - i + 1;
+            const year = now.getFullYear() + Math.floor((month - 1) / 12);
+            const adjustedMonth = ((month - 1) % 12) + 1;
+            const budgets = await budgetRepo.findByHouseholdAndPeriod(householdId, year, adjustedMonth);
+            if (budgets.length > 0) history.push({ month: adjustedMonth, year, budgets });
+        }
+        return { history };
+    });
+
+    toolExecutor.registerTool("get_goal_status", async (params: Record<string, unknown>, context) => {
+        const householdId = context.householdId;
+        const goals = await savingsGoalRepo.findByHouseholdId(householdId);
+        return { goals };
+    });
+
+    toolExecutor.registerTool("get_debt_summary", async (params: Record<string, unknown>, context) => {
+        const householdId = context.householdId;
+        const debtAccounts = await debtRepo.findActiveAccountsByHousehold(householdId);
+        return { debtAccounts };
+    });
+
+    toolExecutor.registerTool("get_attention_items", async (params: Record<string, unknown>, context) => {
+        const householdId = context.householdId;
+        const items = await reviewItemRepo.listReviewItems(householdId);
+        return { items };
+    });
+
+    toolExecutor.registerTool("get_recurring_financial_items", async (params: Record<string, unknown>, context) => {
+        const householdId = context.householdId;
+        const snapshot = await snapshotRepo.findLatestByHouseholdId(householdId);
+        return snapshot ? { recurringItems: [] } : { recurringItems: [] };
+    });
+
+    toolExecutor.registerTool("simulate_purchase", async (params: Record<string, unknown>, context) => {
+        const { amount } = params;
+        return { simulationResult: { amount, impactedAccounts: [] } };
+    });
+
+    toolExecutor.registerTool("simulate_budget_change", async (params: Record<string, unknown>, context) => {
+        const { changes } = params;
+        return { simulationResult: { changes, projectedImpact: {} } };
+    });
+
+    toolExecutor.registerTool("analyze_budget_variance", async (params: Record<string, unknown>, context) => {
+        const householdId = context.householdId;
+        const now = new Date();
+        const budgets = await budgetRepo.findByHouseholdAndPeriod(householdId, now.getFullYear(), now.getMonth() + 1);
+        return budgets.length > 0 ? { variance: {} } : { error: "No budget found" };
+    });
+
+    toolExecutor.registerTool("plan_next_month_budget", async (params: Record<string, unknown>, context) => {
+        const householdId = context.householdId;
+        return { plan: { householdId, month: new Date() } };
+    });
+
+    toolExecutor.registerTool("create_initial_budget", async (params: Record<string, unknown>, context) => {
+        if (!context.isHouseholdOwner) {
+            throw new Error("Only household owners can create budgets");
+        }
+        const householdId = context.householdId;
+        return { budgetId: "new-budget-id", created: true };
+    });
+
+    // Initialize AI Orchestrator
+    const orchestrator = new AIOrchestrator(
+        toolPlanner,
+        toolExecutor,
+        llmProvider,
+        privacyGateway
+    );
+
+    // Initialize the singleton
+    initializeAIOrchestrator(orchestrator);
 
     // Health check
     app.get("/health", (req: Request, res: Response) => {
