@@ -9,6 +9,7 @@ import { registerCoreRoutes } from "./core";
 import { registerDocumentRoutes } from "./documents";
 import { registerPostingRoutes } from "./posting";
 import { registerBudgetRoutes } from "./budgets";
+import { registerBudgetApprovalRoutes } from "./budget-approval";
 import { registerCashFlowRoutes } from "./cash-flow";
 import { registerGoalsRoutes } from "./goals";
 import { registerDebtRoutes } from "./debt";
@@ -20,13 +21,14 @@ import { registerOrchestratorRoutes } from "./ai-orchestrator";
 
 /**
  * All route registrars to be called in order
- * Order: Core → Documents → Posting → Financial Analysis → Health Intelligence → Advisor Conversations → AI Orchestration → Tools
+ * Order: Core → Documents → Posting → Financial Analysis → Budget Approval → Health Intelligence → Advisor Conversations → AI Orchestration → Tools
  */
 const routeRegistrars: RouteRegistrar[] = [
     registerCoreRoutes,                    // Household, accounts, pulse
     registerDocumentRoutes,                // Document upload, status, listing
     registerPostingRoutes,                 // Statement posting, categorization
     registerBudgetRoutes,                  // Budget CRUD and variance
+    registerBudgetApprovalRoutes,          // Budget approval workflow (proposals, approval, audit)
     registerCashFlowRoutes,                // Cash flow analysis
     registerGoalsRoutes,                   // Savings goals and emergency fund
     registerDebtRoutes,                    // Debt intelligence and accounts

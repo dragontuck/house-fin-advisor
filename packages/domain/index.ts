@@ -482,4 +482,12 @@ export {
     createIntentClassifier,
 } from "./advisor-intent-classifier";
 
+// ── Budget Approval Workflow ────────────────────────────────────────────────────
+// Manage approval workflow for AI-generated budget proposals
+export {
+    BudgetApprovalService,
+    createBudgetApprovalService,
+    type BudgetValidationResult,
+} from "./budget-approval-service";
+
 

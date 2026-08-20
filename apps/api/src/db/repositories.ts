@@ -1894,3 +1894,6 @@ export {
     PgWorkflowStateRepository,
     PgToolExecutionRepository,
 } from "./advisor-repositories";
+
+// Re-export budget approval repository
+export { PgBudgetApprovalRepository } from "./repositories/budget-approval";

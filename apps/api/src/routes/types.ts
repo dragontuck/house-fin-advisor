@@ -9,6 +9,7 @@ import {
     TransactionPostingService,
     AdvisorService,
     AdvisorContextService,
+    BudgetApprovalService,
 } from "@house-fin/domain";
 import { FinancialContextBuilder } from "@house-fin/ai";
 import {
@@ -28,6 +29,7 @@ import {
     PgAdvisorMessageRepository,
     PgWorkflowStateRepository,
     PgToolExecutionRepository,
+    PgBudgetApprovalRepository,
 } from "../db/repositories";
 import { ObjectStorageAdapter } from "../storage/object-storage";
 
@@ -44,6 +46,7 @@ export interface RouteContext {
     advisorService: AdvisorService;
     contextBuilder: FinancialContextBuilder;
     contextService: AdvisorContextService;
+    budgetApprovalService: BudgetApprovalService;
     // Repositories
     householdRepo: PgHouseholdRepository;
     memberRepo: PgHouseholdMemberRepository;
@@ -54,6 +57,7 @@ export interface RouteContext {
     reviewItemRepo: PgReviewItemRepository;
     postingRepo: PgPostingRepository;
     budgetRepo: PgBudgetRepository;
+    budgetApprovalRepo: PgBudgetApprovalRepository;
     cashFlowRepo: PgCashFlowRepository;
     savingsGoalRepo: PgSavingsGoalRepository;
     debtRepo: PgDebtRepository;

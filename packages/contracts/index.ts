@@ -931,6 +931,156 @@ export interface UpdateBudgetRequest {
     notes?: string;
 }
 
+// ── Budget Approval Workflow ──────────────────────────────────────────────
+
+/**
+ * Status of a budget proposal in the approval workflow.
+ * Workflow: PROPOSED → UNDER_REVIEW → (APPROVED → PERSISTED) or REJECTED
+ */
+export enum BudgetProposalStatus {
+    PROPOSED = "PROPOSED",           // AI generated, awaiting review
+    UNDER_REVIEW = "UNDER_REVIEW",   // User reviewing or making changes
+    APPROVED = "APPROVED",           // User approved, ready to persist
+    REJECTED = "REJECTED",           // User rejected proposal
+    PERSISTED = "PERSISTED",         // Approved proposal has been persisted as actual budgets
+}
+
+/**
+ * Financial validation status for a proposed budget.
+ */
+export enum BudgetValidationStatus {
+    VALID = "VALID",                 // Passes all validation rules
+    INVALID = "INVALID",             // Fails validation - cannot be approved
+    WARNINGS = "WARNINGS",           // Valid but has warnings user should know about
+}
+
+/**
+ * Event type in the budget approval audit trail.
+ */
+export enum BudgetApprovalAuditEvent {
+    CREATED = "CREATED",             // Proposal created
+    VALIDATED = "VALIDATED",         // Financial validation run
+    USER_REVIEWED = "USER_REVIEWED", // User viewed proposal
+    USER_CHANGED = "USER_CHANGED",   // User modified proposed changes
+    APPROVED = "APPROVED",           // User explicitly approved
+    PERSISTED = "PERSISTED",         // Approved changes written to budgets table
+    REJECTED = "REJECTED",           // User rejected proposal
+}
+
+/**
+ * A proposed budget - NOT yet a persisted budget.
+ * Awaits financial validation and explicit user approval.
+ */
+export interface BudgetProposal {
+    id: EntityId;
+    householdId: EntityId;
+    conversationId?: EntityId;       // If AI-initiated, link to advisor conversation
+
+    // Proposed period
+    periodYear: number;
+    periodMonth: number;
+
+    // Financial context
+    financialSnapshotId?: EntityId;
+    snapshotVersion?: number;
+
+    // Workflow state
+    status: BudgetProposalStatus;
+
+    // Changes: original proposal
+    proposedChanges: ProposedChange[];
+
+    // Changes: user's modifications (if any)
+    approvedChanges?: ProposedChange[];
+
+    // Validation results
+    validationStatus?: BudgetValidationStatus;
+    validationNotes?: Record<string, unknown>;
+
+    // Display metadata
+    title?: string;
+    description?: string;
+
+    // Audit trail
+    createdBy: EntityId;             // Who initiated (AI user ID or actual user)
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+/**
+ * Explicit approval decision - converts approved proposal to persisted budgets.
+ */
+export interface BudgetApproval {
+    id: EntityId;
+    proposalId: EntityId;
+    householdId: EntityId;
+
+    // Approval decision
+    approvedBy: EntityId;
+    approvedAt: Date;
+    comment?: string;
+
+    // Link to persisted budgets
+    createdBudgetSnapshotId?: EntityId;
+}
+
+/**
+ * Audit event in budget approval workflow.
+ */
+export interface BudgetApprovalAuditEntry {
+    id: EntityId;
+    proposalId: EntityId;
+    householdId: EntityId;
+
+    eventType: BudgetApprovalAuditEvent;
+    previousState?: Record<string, unknown>;
+    newState?: Record<string, unknown>;
+
+    triggeredBy?: EntityId;
+    eventAt: Date;
+    reason?: string;
+}
+
+/**
+ * Request to create a budget proposal.
+ */
+export interface CreateBudgetProposalRequest {
+    periodYear: number;
+    periodMonth: number;
+    proposedChanges: ProposedChange[];
+    title?: string;
+    description?: string;
+    financialSnapshotId?: EntityId;
+    conversationId?: EntityId;
+}
+
+/**
+ * Request to review and optionally modify a proposal.
+ */
+export interface ReviewBudgetProposalRequest {
+    // User's optional modifications to proposed changes
+    approvedChanges?: ProposedChange[];
+    comment?: string;
+}
+
+/**
+ * Request to explicitly approve a proposal and persist it as actual budgets.
+ */
+export interface ApproveBudgetProposalRequest {
+    comment?: string;
+    // Optional: if user modified the proposal during review
+    approvedChanges?: ProposedChange[];
+}
+
+/**
+ * Response containing the approval result and new budget version info.
+ */
+export interface ApproveBudgetProposalResponse {
+    approval: BudgetApproval;
+    newBudgets: Budget[];
+    previousBudgets: Budget[];
+}
+
 export interface CategorizationRequest {
     category: string; // empty string clears the category
 }

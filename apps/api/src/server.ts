@@ -54,6 +54,8 @@ import {
     AdvisorService,
     AdvisorContextService,
     createAdvisorContextService,
+    BudgetApprovalService,
+    createBudgetApprovalService,
 } from "@house-fin/domain";
 import {
     AIToolPlanner,
@@ -78,6 +80,7 @@ import {
     PgReviewItemRepository,
     PgPostingRepository,
     PgBudgetRepository,
+    PgBudgetApprovalRepository,
     PgCashFlowRepository,
     PgSavingsGoalRepository,
     PgDebtRepository,
@@ -91,6 +94,7 @@ import { uploadRateLimiter } from "./middleware/rate-limit";
 import { ObjectStorageAdapter, createObjectStorageAdapter } from "./storage/object-storage";
 import { getDocumentProcessingQueue, enqueueDocumentProcessing, closeDocumentProcessingQueue, getQueueStats } from "./queue/queue";
 import { registerDocumentProcessingWorker } from "./queue/document-processor";
+import { registerBudgetApprovalRoutes } from "./routes/budget-approval";
 
 /**
  * Error with context
@@ -179,6 +183,11 @@ export function createServer(): Express {
 
     const budgetRepo = new PgBudgetRepository();
     const budgetService = createBudgetService();
+
+    // Budget approval workflow
+    const budgetApprovalRepo = new PgBudgetApprovalRepository();
+    const budgetApprovalService = createBudgetApprovalService();
+
     const cashFlowRepo = new PgCashFlowRepository();
     const recurringDetector = createRecurringDetector();
     const cashFlowService = createCashFlowService();
@@ -2606,6 +2615,40 @@ export function createServer(): Express {
             }
         },
     );
+
+    // ==================== BUDGET APPROVAL WORKFLOW ROUTES ====================
+
+    // Create route context for budget approval routes
+    const approvalRouteContext = {
+        app,
+        householdService,
+        reviewQueueService,
+        postingService,
+        advisorService,
+        contextBuilder,
+        contextService,
+        budgetApprovalService,
+        householdRepo,
+        memberRepo,
+        accountRepo,
+        snapshotRepo,
+        settingsRepo,
+        documentRepo,
+        reviewItemRepo,
+        postingRepo,
+        budgetRepo,
+        budgetApprovalRepo,
+        cashFlowRepo,
+        savingsGoalRepo,
+        debtRepo,
+        conversationRepo,
+        messageRepo,
+        workflowRepo,
+        toolExecutionRepo,
+        storageAdapter,
+    };
+
+    registerBudgetApprovalRoutes(approvalRouteContext);
 
     /**
      * 404 handler
