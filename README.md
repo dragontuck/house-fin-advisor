@@ -1,263 +1,284 @@
 # House Financial Advisor
 
-A privacy-first, self-hosted household financial advisor application.
+A privacy-first, self-hosted household financial advisor built to keep financial data inside the home environment while providing deterministic, explainable guidance.
 
-## 🎯 Vision
+## Current project state
 
-Help households understand their financial position, make better financial decisions, and build wealth—without exposing sensitive data to external APIs.
+The project has moved beyond the original household pulse prototype and now includes the main financial intelligence, document ingestion, budgeting, and AI advisory layers that were implemented across the later slices.
 
-## 🏗️ Architecture
+### Implemented and validated
 
-**Modular Monolith**: Self-contained deployable units with clear domain boundaries. Future slices can be extracted into services without domain model changes.
+- ✅ Core household, account, and financial snapshot logic
+- ✅ Statement/document ingestion and posting workflow
+- ✅ Budget planning, variance analysis, and approval flows
+- ✅ Cash flow and recurring transaction detection
+- ✅ Savings goals and emergency-fund tracking
+- ✅ Debt intelligence and health/attention engine
+- ✅ AI tool layer with deterministic tool execution
+- ✅ Financial context builder and privacy-safe orchestration
+- ✅ Conversational advisor workflows with tool audit trails
+- ✅ API + React web dashboard integration
 
-- **API**: Express.js/TypeScript - HTTP endpoints for household financial management
-- **Web UI**: React/Vite - Plain-language dashboard for non-technical users
-- **Domain**: TypeScript services - Financial calculations and business rules
-- **Database**: PostgreSQL - Household data, accounts, transactions (future)
-- **Auth**: Keycloak - OAuth, multi-user support (Slice 2+)
+### Current focus
 
-## ✨ Slice 1: Household Financial Pulse
+This is a self-hosted financial operating system for households, not a generic chatbot. The system aims to:
 
-**Status**: ✅ Complete
+- keep all sensitive household data inside a private environment
+- make financial calculations deterministic and testable
+- expose only typed, validated tools to AI workflows
+- provide plain-language plans and recommendations that are grounded in actual household data
 
-The first vertical slice establishes the core domain, API, persistence, financial calculation boundary, and primary UX pattern.
+---
 
-### What's Included
+## Architecture
 
-- ✅ Household & household members
-- ✅ Financial accounts (checking, savings, retirement, debt)
-- ✅ Deterministic financial calculations (cash, debt, net worth, surplus)
-- ✅ Financial health status determination
-- ✅ Financial Pulse dashboard UI
-- ✅ API endpoints for household management
-- ✅ Database migrations and seeded development data
-- ✅ Domain tests for all financial rules
+The codebase is organized as a modular monolith with clear boundaries:
 
-### What's NOT Included (Intentionally)
+- API: Express + TypeScript services and route layer
+- Web: Vite + React dashboard for household finance views
+- Domain: core financial rules, calculations, and workflows
+- AI: tool planner, executor, orchestrator, and context builder
+- Contracts: shared types and API contracts across apps/packages
+- Security: privacy gateway and sanitization boundaries
+- Database: PostgreSQL with migration-based schema evolution
+- Infra: Redis, Keycloak, and object storage used by the app environment
 
-- ❌ Bank integrations or statement ingestion
-- ❌ AI recommendations or research
-- ❌ Transaction categorization
-- ❌ Investment analysis
-- ❌ Microservices
-- ❌ Multi-tenancy (Slice 1 uses single seeded household)
+---
 
-### Quick Start
+## Implemented capability by slice
 
-This project uses existing shared infrastructure. Ensure you have access to:
-- **PostgreSQL** on `localhost:5434`
-- **Redis** on `localhost:6379` (password required)
-- **Keycloak** on `https://keycloak.keystone.internal:7443/`
+### Slice 1: Household financial pulse
 
-**Using Docker (Recommended)**:
+Complete foundation for household records and deterministic financial metrics.
+
+Included:
+- household and member management
+- account tracking for assets and liabilities
+- cash, debt, net worth, and monthly surplus calculations
+- financial health status
+- dashboard for household pulse data
+
+### Slice 2: persistence and infrastructure integration
+
+Completed data and infrastructure groundwork.
+
+Included:
+- PostgreSQL-backed persistence
+- migration-based schema changes
+- seed data and shared infrastructure configuration
+- household-scoped access patterns
+
+### Slice 3: financial intelligence
+
+This layer turns raw household data into operational insight.
+
+Included:
+- budgets and budget variance analysis
+- recurring expense detection
+- cash flow intelligence
+- savings goals and emergency fund tracking
+- debt signals and trend analysis
+- health and attention items for users
+- historical snapshot explainability
+
+### Slice 4: AI advisor, tools, and privacy boundary
+
+The AI layer is implemented as a deterministic tool-based workflow.
+
+Included:
+- tool execution endpoints
+- AI planner and executor
+- financial context builder
+- privacy filtering before external LLM interactions
+- conversational workflow orchestration
+- audit logs for tool use
+
+---
+
+## Privacy and safety model
+
+The project explicitly follows a privacy-first design:
+
+- no SSN, account numbers, routing numbers, credentials, or raw statements are sent to external LLMs
+- all sensitive data is filtered before reaching external providers
+- the LLM does not have unrestricted database access
+- financial calculations remain in domain services, not prompts
+- tool behavior is deterministic and validated
+- recommendation outputs reference snapshots, policy versions, and evidence
+
+These patterns are enforced by the architecture and documented in the project guidance files.
+
+---
+
+## Quick start
+
+### Prerequisites
+
+Use the shared project infrastructure described in the docs.
+
+- PostgreSQL: `localhost:5434`
+- Redis: `localhost:6379`
+- Keycloak: `https://keycloak.keystone.internal:7443/`
+- object storage / document processing environment for uploads
+
+See:
+- `docs/USING_EXISTING_INFRASTRUCTURE.md`
+- `AGENTS.md`
+
+### Install dependencies
+
 ```bash
-# Start all services
-docker compose up -d --build
-
-# Access:
-# - Web UI: http://localhost:6173
-# - API: http://localhost:6723
+npm install
 ```
 
-**Local Development** (requires infrastructure access):
+### Run the API
+
 ```bash
-# Terminal 1: API server
 cd apps/api
 npm run dev
-# Output: Server running on http://localhost:6723
+```
 
-# Terminal 2: Web UI
+Typically served on:
+- `http://localhost:6723`
+
+### Run the web app
+
+```bash
 cd apps/web
 npm run dev
-# Output: VITE ready at http://localhost:6173
 ```
 
-For first-time setup, apply database migrations:
-```bash
-psql -h localhost -p 5434 -U hf_admin -d house_financial < packages/db/migrations/001_initial_schema.sql
-psql -h localhost -p 5434 -U hf_admin -d house_financial < packages/db/migrations/002_seed_tucker_household.sql
-```
+Typically served on:
+- `http://localhost:6173`
 
-📖 [Using Existing Infrastructure Guide](./docs/USING_EXISTING_INFRASTRUCTURE.md)
-
-### Local Development
+### Run tests
 
 ```bash
-# Verify infrastructure access
-psql -h localhost -p 5434 -U hf_admin -d house_financial -c "SELECT 1"
-redis-cli -p 6379 ping
-
-# Install dependencies
-npm install
-
-# Run tests
-npm test           # Run unit tests
-npm run dev        # Start API + Web concurrently
-
-# Run linters
-npm run lint       # Lint TypeScript
-npm run type-check # Type checking
+npm test
 ```
 
-**Infrastructure Details:**
-- PostgreSQL: `localhost:5434` (user: `hf_admin`, password: `hf_admin`, db: `house_financial`)
-- Redis: `localhost:6379` (password required - see [infrastructure docs](./docs/USING_EXISTING_INFRASTRUCTURE.md))
-- Keycloak: `https://keycloak.keystone.internal:7443/` (realm: `house-fin`)
-- MinIO (Docker): `localhost:9000` (object storage for documents)
+For app-level checks:
 
-**Docker Services:**
-- API: `http://localhost:6723` (Express + TypeScript)
-- Web: `http://localhost:6173` (React + Vite with hot reload)
-- MinIO Console: `http://localhost:9001` (user: minioadmin)
-
-📖 [Existing Infrastructure Guide](./docs/USING_EXISTING_INFRASTRUCTURE.md)
-
-## 📚 Documentation
-
-- [Slice 1 Implementation](./SLICE_1_IMPLEMENTATION.md) - Complete architecture, design decisions, data flow
-- [Architectural Rules](./AGENTS.md) - Privacy, financial safety, domain-driven design constraints
-- [Database Schema](./packages/db/migrations/) - SQL migrations and seed data
-
-## 🔐 Privacy & Security
-
-- **No external LLM calls with financial data**: All sensitive data stays private
-- **Deterministic calculations**: Financial rules are testable, verifiable
-- **Type-safe contracts**: Domain models prevent rule drift across layers
-- **Money as integers**: Avoids floating-point precision errors
-- **Append-only audit trail**: Raw data never silently overwritten
-
-## 🧮 Financial Rules (Slice 1)
-
-### Cash
-Sum of checking + savings accounts
-
-### Debt
-Sum of credit cards, loans, and mortgages (returned as positive liability)
-
-### Net Worth
-Assets - Liabilities
-
-### Monthly Surplus
-Monthly income - essential expenses - discretionary expenses
-
-### Financial Health Status
-- **HEALTHY**: Positive surplus, manageable debt, adequate cash reserves
-- **ATTENTION**: Low surplus or insufficient emergency reserves
-- **AT_RISK**: Negative cash flow or debt > 3x annual income
-
-## 🗂️ Project Structure
-
+```bash
+cd apps/api && npm run test
+cd apps/web && npm test
 ```
+
+For type-checking:
+
+```bash
+npm run type-check
+cd apps/api && npm run type-check
+cd apps/web && npm run type-check
+```
+
+---
+
+## Main project structure
+
+```text
 apps/
-  api/            Express API server
-  web/            React web UI
-  worker/         Background jobs (future)
+  api/            Express API and service orchestration
+  web/            React dashboard and UI flows
+  worker/         Background processing workers
 
 packages/
-  contracts/      Shared TypeScript types
-  domain/         Domain services & interfaces
-  financial/      Financial calculations (testable, deterministic)
-  db/             Database migrations & schema
-  security/       Auth utilities
-  ui/             Shared UI components (future)
+  ai/             AI orchestration, planner, executor, context builder
+  contracts/      Shared type contracts and API schemas
+  db/             Database migrations and schema setup
+  domain/         Financial rules and domain services
+  security/       Privacy and governance utilities
+  ui/             Shared UI primitives and patterns
 
-tests/
-  financial/      Domain calculation tests
-  integration/    API integration tests
-  e2e/            End-to-end tests (ready for implementation)
-
-infra/
-  docker/         Docker configuration
-  keycloak/       Keycloak realm setup
-  postgres/       PostgreSQL initialization
+docs/             Architecture, implementation, and validation guides
+tests/            Financial, integration, and UI tests
+infra/            Infrastructure and environment configuration
 ```
 
-## 🧪 Testing
+---
 
-### Unit Tests
+## Key feature areas
+
+### Household finance core
+- account balances and liabilities
+- snapshot calculations for net worth, cash, debt, and surplus
+- household health assessment
+
+### Financial intelligence
+- budget creation and variance review
+- recurring transaction detection
+- savings goal planning
+- debt trend tracking
+- health/attention engine and explainability metadata
+
+### Statement/document processing
+- document upload and validation
+- statement processing queue
+- transaction posting and review flow
+- audit trail for processed records
+
+### AI-guided advice
+- structured financial context gathering
+- tool-based planning and execution
+- privacy-safe provider integration
+- conversation-based advisor workflow
+
+---
+
+## Documentation map
+
+Use these guides for more detail:
+
+- `docs/INDEX.md` — project documentation index
+- `docs/COMPLETION_SUMMARY.md` — implementation summary
+- `docs/AI_TOOL_LAYER_ARCHITECTURE.md` — AI tool architecture
+- `docs/AI_TOOL_LAYER_DETERMINISM_TESTING.md` — deterministic testing guidance
+- `docs/PRIVACY_BOUNDARY_IMPLEMENTATION.md` — privacy boundary design
+- `docs/FINANCIAL_CONTEXT_BUILDER.md` — context-building logic
+- `docs/SESSION_SUMMARY_SLICE3.md` — Slice 3 integration summary
+- `AGENTS.md` — product and architecture rules
+
+---
+
+## Testing and validation
+
+The project includes financial, integration, and end-to-end validation around real household data and deterministic calculations.
+
+Common commands:
+
 ```bash
-# All tests
 npm test
-
-# Watch mode
-npm test -- --watch
-
-# Coverage
-npm test -- --coverage
+cd apps/api && npm run test
+cd apps/web && npm test
 ```
 
-### Integration Tests (Slice 1 Complete)
+Key validation areas include:
+- financial snapshot correctness
+- budget and debt scenarios
+- document ingestion and posting flows
+- AI tool determinism
+- dashboard behavior and user journeys
 
-**Status**: ✅ Full end-to-end testing with real data
+---
 
-The integration test suite (`apps/web/e2e/integration.spec.ts`) validates the complete journey with **zero mocks in the production data path**:
+## Project philosophy
 
-```bash
-# Quick start (automated)
-./run-integration-tests.sh    # Linux/Mac
-run-integration-tests.bat     # Windows
+This project treats household finance as a trust-sensitive domain.
 
-# Manual setup
-docker-compose up              # Docker services
-cd apps/api && npm run dev     # API on :3000
-cd apps/web && npm run dev     # Web on :5173
-npm test e2e/integration.spec.ts  # Run tests
-```
+It emphasizes:
+- deterministic financial logic
+- privacy-first architecture
+- explainable recommendations
+- data ownership inside the private environment
+- safe augmentation with AI rather than uncontrolled access
 
-**What it validates**:
-- ✅ Real PostgreSQL data (Tucker Household)
-- ✅ Complete journey: Household → Accounts → Snapshot → UI
-- ✅ All 6 key metrics calculated correctly
-- ✅ Deterministic calculations (same results on reload)
-- ✅ Responsive design (desktop, tablet, mobile)
-- ✅ Authorization boundaries (Slice 1 hardcoded household)
-- ✅ Error handling and retry flows
-- ✅ No raw IDs exposed to users
-- ✅ Currency formatting (cents → dollars)
+That makes it suitable as a practical household financial advisor rather than a generic LLM wrapper around personal finance data.
 
-**Expected result**: 25+ tests pass with real data
+---
 
-📚 [Integration Testing Guide](./docs/INTEGRATION_TESTING.md)
-📊 [Slice 1 Status Report](./docs/SLICE_1_INTEGRATION_COMPLETE.md)
+## License
 
-### Test Coverage
-
-- ✅ Financial calculations (cash, debt, net worth, health status)
-- ✅ Snapshot calculation matches expected Tucker household values
-- ✅ API endpoint integration (6 endpoints tested with real data)
-- ✅ E2E journey tests (login → household → accounts → pulse)
-- ✅ Error handling and recovery
-- ✅ Responsive UI across all screen sizes
-
-
-## 📋 API Endpoints
-
-### Household Management
-- `GET /api/household` - Get household info
-- `GET /api/household/members` - List members
-
-### Accounts
-- `GET /api/accounts` - List accounts
-- `POST /api/accounts` - Create account
-
-### Financial Snapshot
-- `GET /api/financial-snapshot` - Raw calculation
-- `GET /api/financial-pulse` - UI-ready summary
-
-## 🎨 UI/UX Design
-
-The Financial Pulse dashboard answers 5 key questions in 30 seconds:
-
-1. **How are we doing?** → Health status badge
-2. **What's our position?** → Net worth + cash available
-3. **What changed?** → Monthly income/expenses/surplus
-4. **What needs attention?** → Status message from structured data
-5. **Where do we go?** → Progressive disclosure to details
-
-**Design for non-technical users**:
-- Plain language (no financial jargon)
-- No database IDs or API terminology
-- Large, readable numbers with color coding
+This project is licensed under the MIT license. See `LICENSE` for details.
 - Responsive mobile design
 - Progressive disclosure (simple → detailed)
 
