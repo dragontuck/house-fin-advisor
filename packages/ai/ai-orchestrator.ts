@@ -25,6 +25,7 @@ import { AIToolPlanner, PlannedToolCall, ToolExecutionPlan } from "./ai-tool-pla
 import { AIToolExecutor, ToolExecutionContext, ToolExecutionResult } from "./ai-tool-executor";
 import { LLMProvider, LLMRequest, LLMResponse, LLMProviderError } from "./llm-provider";
 import { PrivacyGateway, getPrivacyGateway } from "@house-fin/security";
+import { validateGroundedResponse, buildSafeFallback, GroundingViolation } from "./response-grounding";
 
 /**
  * Request to process by orchestrator
@@ -73,6 +74,10 @@ export interface OrchestratorResponse {
             input: number;
             output: number;
         };
+        /** Whether the LLM response passed grounding validation as-is */
+        groundingPassed?: boolean;
+        /** Violation types detected, if grounding failed and a safe fallback was substituted */
+        groundingViolations?: string[];
     };
 }
 
@@ -140,13 +145,14 @@ export class AIOrchestrator {
                 request.correlationId
             );
 
-            // Step 9: Validate response
-            const validatedResponse = this.validateResponse(llmResponse, toolResults);
+            // Step 9: Validate response is grounded in tool results; substitute a safe,
+            // deterministic fallback if the LLM said anything unsupported.
+            const validated = this.validateResponse(llmResponse, toolResults);
 
             // Step 10: Build final orchestrator response
             return {
                 correlationId: request.correlationId,
-                assistantMessage: validatedResponse,
+                assistantMessage: validated.content,
                 toolResults,
                 success: true,
                 metadata: {
@@ -159,6 +165,8 @@ export class AIOrchestrator {
                             output: llmResponse.usage.outputTokens,
                         }
                         : undefined,
+                    groundingPassed: validated.groundingPassed,
+                    groundingViolations: validated.violations.map(v => v.type),
                 },
             };
         } catch (error) {
@@ -327,28 +335,28 @@ Please provide thoughtful financial advice based on the data above.`;
     }
 
     /**
-     * Validate LLM response
+     * Validates the LLM response against the deterministic tool results before it can
+     * reach the user. An ungrounded response (unsupported numbers, fabricated accounts,
+     * fabricated research, unsupported assumptions, or contradictions with tool output)
+     * is never shown - it's replaced with a safe fallback built only from tool results.
      */
-    private validateResponse(response: LLMResponse, toolResults: ToolExecutionResult[]): string {
-        // Basic validation
+    private validateResponse(
+        response: LLMResponse,
+        toolResults: ToolExecutionResult[]
+    ): { content: string; groundingPassed: boolean; violations: GroundingViolation[] } {
         if (!response.content || response.content.trim().length === 0) {
             throw new Error("LLM returned empty response");
         }
 
-        // Check for common hallucinations
-        const hallucinations = [
-            /\$[0-9,]+\.[0-9]{2} (that|which|isn't|is not) in the data/i,
-            /according to my calculations?:/i,
-            /the system shows/i,
-        ];
-
-        for (const pattern of hallucinations) {
-            if (pattern.test(response.content)) {
-                console.warn("Potential hallucination detected in LLM response:", pattern);
-            }
+        const grounding = validateGroundedResponse(response.content, toolResults);
+        if (grounding.valid) {
+            return { content: response.content, groundingPassed: true, violations: [] };
         }
 
-        return response.content;
+        console.warn("[RESPONSE_GROUNDING] Rejected ungrounded advisor response", {
+            violations: grounding.violations.map((v) => `${v.type}: ${v.detail}`),
+        });
+        return { content: buildSafeFallback(toolResults), groundingPassed: false, violations: grounding.violations };
     }
 }
 

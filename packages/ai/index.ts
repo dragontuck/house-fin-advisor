@@ -89,3 +89,11 @@ export {
     getAIOrchestrator,
     initializeAIOrchestrator,
 } from "./ai-orchestrator";
+
+export {
+    validateGroundedResponse,
+    buildSafeFallback,
+    type GroundingResult,
+    type GroundingViolation,
+    type GroundingViolationType,
+} from "./response-grounding";
