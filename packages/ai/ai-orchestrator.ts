@@ -219,12 +219,18 @@ export class AIOrchestrator {
                     // Parameters will be extracted from request context if available
                 };
 
-            case "simulate_purchase":
-                // User should specify purchase details in their message
+            case "simulate_purchase": {
+                // Extract the purchase amount and payment method from the user's own words.
+                // No amount is invented - if none is found, the tool receives 0 and reports it.
+                const purchaseAmountCents = extractDollarAmountCents(request.userMessage);
+                const paymentMethod = extractPaymentMethod(request.userMessage);
                 return {
                     ...base,
-                    // Parameters extracted from parsed message
+                    purchaseAmountCents,
+                    paymentMethod,
+                    description: request.userMessage,
                 };
+            }
 
             case "simulate_budget_change":
                 // Budget changes extracted from user message
@@ -377,4 +383,27 @@ export function getAIOrchestrator(): AIOrchestrator {
 
 export function initializeAIOrchestrator(orchestrator: AIOrchestrator): void {
     orchestratorInstance = orchestrator;
+}
+
+/**
+ * Extracts a dollar amount (e.g. "$4,000" or "4000 dollars") from free text and
+ * converts it to cents. Returns 0 if no amount is found - the tool must never guess.
+ */
+function extractDollarAmountCents(text: string): number {
+    const match = text.match(/\$\s?([\d,]+(?:\.\d{1,2})?)|([\d,]+(?:\.\d{1,2})?)\s?(?:dollars|usd)/i);
+    const raw = match?.[1] ?? match?.[2];
+    if (!raw) return 0;
+    const dollars = parseFloat(raw.replace(/,/g, ""));
+    return Number.isFinite(dollars) ? Math.round(dollars * 100) : 0;
+}
+
+/**
+ * Infers the intended payment method from free text. Defaults to CASH when unspecified.
+ */
+function extractPaymentMethod(text: string): "CASH" | "CREDIT_CARD" | "LOAN" | "SAVINGS" {
+    const lower = text.toLowerCase();
+    if (/credit card|credit\b/.test(lower)) return "CREDIT_CARD";
+    if (/loan|finance(d)?|financing/.test(lower)) return "LOAN";
+    if (/savings/.test(lower)) return "SAVINGS";
+    return "CASH";
 }

@@ -7,6 +7,7 @@ export {
     analyzeBudgetVariance,
     planNextMonthBudget,
     simulateBudgetChange,
+    simulatePurchase,
     createToolDependencies,
     type ToolDependencies,
 } from "./tool-implementations";

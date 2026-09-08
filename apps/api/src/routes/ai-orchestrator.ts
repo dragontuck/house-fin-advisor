@@ -29,6 +29,56 @@ class OrchestratorError extends Error {
 }
 
 /**
+ * UX presentation mode for a workflow. Drives which layout the web app renders -
+ * never expose raw workflow/tool names to the user.
+ */
+type AdvisorUxMode = "INFORMATION" | "DIAGNOSIS" | "PLANNING" | "SCENARIO";
+
+const UX_MODE_BY_WORKFLOW: Record<string, AdvisorUxMode> = {
+    [AdvisorWorkflow.FINANCIAL_HEALTH]: "INFORMATION",
+    [AdvisorWorkflow.BUDGET_STATUS]: "INFORMATION",
+    [AdvisorWorkflow.CASH_FLOW]: "INFORMATION",
+    [AdvisorWorkflow.GOAL_STATUS]: "INFORMATION",
+    [AdvisorWorkflow.DEBT_STATUS]: "INFORMATION",
+    [AdvisorWorkflow.BUDGET_DIAGNOSE]: "DIAGNOSIS",
+    [AdvisorWorkflow.BUDGET_CREATE]: "PLANNING",
+    [AdvisorWorkflow.BUDGET_REVISE]: "PLANNING",
+    [AdvisorWorkflow.BUDGET_SCENARIO]: "SCENARIO",
+    [AdvisorWorkflow.AFFORDABILITY]: "SCENARIO",
+    [AdvisorWorkflow.GENERAL_FINANCIAL_QUESTION]: "INFORMATION",
+};
+
+/**
+ * Human-friendly, non-technical descriptions of what each tool is doing.
+ * Shown to the user instead of tool names (e.g. "Checking your current cash flow..."
+ * instead of "Executing get_cash_flow").
+ */
+const FRIENDLY_ACTIVITY_BY_TOOL: Record<string, string> = {
+    get_financial_snapshot: "Reviewing your overall financial picture...",
+    get_cash_flow: "Checking your current cash flow...",
+    get_current_budget: "Looking at your current budget...",
+    get_budget_status: "Comparing your budget to actual spending...",
+    get_historical_budget_performance: "Reviewing past months for patterns...",
+    get_goal_status: "Checking progress on your savings goals...",
+    get_debt_summary: "Reviewing your debt obligations...",
+    get_attention_items: "Looking for anything that needs your attention...",
+    get_recurring_financial_items: "Identifying recurring bills and income...",
+    simulate_purchase: "Running the numbers on this purchase...",
+    simulate_budget_change: "Testing out that budget change...",
+    analyze_budget_variance: "Digging into why spending differs from plan...",
+    create_initial_budget: "Building your first budget...",
+    plan_next_month_budget: "Building a proposed budget for next month...",
+};
+
+function getUxMode(workflowType: string): AdvisorUxMode {
+    return UX_MODE_BY_WORKFLOW[workflowType] ?? "INFORMATION";
+}
+
+function getFriendlyActivity(toolName: string): string {
+    return FRIENDLY_ACTIVITY_BY_TOOL[toolName] ?? "Gathering the information I need...";
+}
+
+/**
  * Register orchestrator routes
  */
 export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext) => {
@@ -152,6 +202,7 @@ export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext
                 res.json({
                     messageId: assistantMessage.id,
                     assistantMessage: orchestratorResponse.assistantMessage,
+                    mode: getUxMode(orchestratorResponse.metadata.workflowType),
                     metadata: {
                         workflowType: orchestratorResponse.metadata.workflowType,
                         toolsExecuted: orchestratorResponse.metadata.toolsExecuted,
@@ -159,10 +210,11 @@ export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext
                         llmTokensUsed: orchestratorResponse.metadata.llmTokensUsed,
                     },
                     toolResults: orchestratorResponse.toolResults.map(r => ({
-                        toolName: r.toolName,
+                        friendlyActivity: getFriendlyActivity(r.toolName),
                         success: r.success,
                         durationMs: r.durationMs,
                         error: r.error,
+                        data: r.success ? r.data : undefined,
                     })),
                 });
             } catch (error) {

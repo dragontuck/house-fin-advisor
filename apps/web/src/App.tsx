@@ -24,6 +24,7 @@ import GoalsSection from "./components/GoalsSection";
 import DebtSection from "./components/DebtSection";
 import TrendsSection from "./components/TrendsSection";
 import StatementUpload from "./components/StatementUpload";
+import AdvisorSection from "./components/Advisor/AdvisorSection";
 import "./App.css";
 
 function App() {
@@ -112,6 +113,8 @@ function App() {
                     </button>
                 </div>
                 {showUpload && <StatementUpload />}
+
+                <AdvisorSection />
 
                 {health && <StatusBanner health={health} />}
                 {health && <AttentionSection items={health.attentionItems} />}

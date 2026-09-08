@@ -33,10 +33,14 @@ import {
     AnalyzeBudgetVarianceOutput,
     PlanNextMonthBudgetOutput,
     SimulateBudgetChangeOutput,
+    SimulatePurchaseOutput,
     ProposedBudgetCategory,
     NextMonthBudgetProposal,
     VarianceTrend,
 } from "@house-fin/contracts";
+
+/** Household emergency fund floor used by simulate_purchase (months of essential expenses). */
+const EMERGENCY_FUND_MINIMUM_MONTHS = 3;
 
 /**
  * Dependencies required by all tools
@@ -83,6 +87,99 @@ export interface ToolDependencies {
     recurringPatternsRepo: {
         findByHouseholdId(householdId: EntityId): Promise<RecurringPattern[]>;
     };
+    /** Optional: needed by simulate_purchase to read current cash position. */
+    snapshotRepo?: {
+        findLatestByHouseholdId(householdId: EntityId): Promise<FinancialSnapshot | null>;
+    };
+}
+
+/**
+ * ──────────────────────────────────────────────────────────────────────────────
+ * TOOL IMPLEMENTATION 5: simulate_purchase
+ *
+ * Simulates the financial impact of a one-time purchase against the household's
+ * latest snapshot (liquid cash) and settings (monthly essential expenses).
+ * Deterministic: same snapshot + inputs always produce the same result.
+ * ──────────────────────────────────────────────────────────────────────────────
+ */
+export async function simulatePurchase(
+    householdId: EntityId,
+    purchaseAmountCents: Money,
+    paymentMethod: "CASH" | "CREDIT_CARD" | "LOAN" | "SAVINGS",
+    description: string,
+    deps: ToolDependencies,
+    options?: { category?: string }
+): Promise<SimulatePurchaseOutput> {
+    try {
+        const snapshot = deps.snapshotRepo ? await deps.snapshotRepo.findLatestByHouseholdId(householdId) : null;
+        const settings = await deps.settingsRepo.findByHouseholdId(householdId);
+
+        const currentLiquidCashCents = (snapshot?.cash ?? 0) as Money;
+        const essentialExpensesCents = (settings?.monthlyEssentialExpenses ?? snapshot?.monthlyEssentialExpenses ?? 0) as Money;
+        const monthlySurplusCents = (snapshot?.monthlySurplus ?? 0) as Money;
+        const emergencyFundFloorCents = (essentialExpensesCents * EMERGENCY_FUND_MINIMUM_MONTHS) as Money;
+
+        const paysFromCash = paymentMethod === "CASH" || paymentMethod === "SAVINGS";
+        const projectedLiquidCashCents = (paysFromCash
+            ? currentLiquidCashCents - purchaseAmountCents
+            : currentLiquidCashCents) as Money;
+
+        // Financed purchases are assumed amortized over 12 months for surplus impact
+        const estimatedMonthlyPaymentCents = paymentMethod === "CASH" || paymentMethod === "SAVINGS"
+            ? 0
+            : Math.ceil(purchaseAmountCents / 12);
+
+        const keepsEmergencyFundIntact = !paysFromCash || projectedLiquidCashCents >= emergencyFundFloorCents;
+        const keepsSurplusPositive = monthlySurplusCents - estimatedMonthlyPaymentCents >= 0;
+        const isAffordable = keepsEmergencyFundIntact && keepsSurplusPositive;
+
+        const recommendations: string[] = [];
+        if (!keepsEmergencyFundIntact) {
+            recommendations.push(
+                `Paying in cash would drop liquid savings below your ${EMERGENCY_FUND_MINIMUM_MONTHS}-month emergency fund floor.`
+            );
+        }
+        if (!keepsSurplusPositive) {
+            recommendations.push("Estimated monthly payment would exceed your current monthly surplus.");
+        }
+        if (isAffordable) {
+            recommendations.push("This purchase fits within your current cash position and emergency fund floor.");
+        }
+
+        return {
+            householdId,
+            scenario: {
+                purchaseAmountCents,
+                paymentMethod,
+                description,
+            },
+            projectedImpact: {
+                currentLiquidCashCents,
+                projectedLiquidCashCents,
+                affectsCashPosition: paysFromCash,
+                affectsDebtLevel: paymentMethod === "CREDIT_CARD" || paymentMethod === "LOAN",
+                affectsEmergencyFund: paysFromCash,
+                budgetImpactCategory: options?.category,
+            },
+            recommendations,
+            isAffordable,
+        };
+    } catch (error) {
+        return {
+            householdId,
+            scenario: { purchaseAmountCents, paymentMethod, description },
+            projectedImpact: {
+                currentLiquidCashCents: 0 as Money,
+                projectedLiquidCashCents: 0 as Money,
+                affectsCashPosition: false,
+                affectsDebtLevel: false,
+                affectsEmergencyFund: false,
+            },
+            recommendations: [],
+            isAffordable: false,
+            error: error instanceof Error ? error.message : "Unknown error simulating purchase",
+        };
+    }
 }
 
 /**

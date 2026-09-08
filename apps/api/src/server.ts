@@ -65,6 +65,12 @@ import {
     createFinancialContextBuilder,
     createDefaultLLMProvider,
     initializeAIOrchestrator,
+    createInitialBudget,
+    analyzeBudgetVariance,
+    planNextMonthBudget,
+    simulateBudgetChange,
+    simulatePurchase,
+    type ToolDependencies,
 } from "@house-fin/ai";
 import {
     PrivacyGateway,
@@ -95,6 +101,8 @@ import { ObjectStorageAdapter, createObjectStorageAdapter } from "./storage/obje
 import { getDocumentProcessingQueue, enqueueDocumentProcessing, closeDocumentProcessingQueue, getQueueStats } from "./queue/queue";
 import { registerDocumentProcessingWorker } from "./queue/document-processor";
 import { registerBudgetApprovalRoutes } from "./routes/budget-approval";
+import { registerAdvisorConversationRoutes } from "./routes/advisor-conversations";
+import { registerOrchestratorRoutes } from "./routes/ai-orchestrator";
 
 /**
  * Error with context
@@ -301,6 +309,52 @@ export function createServer(): Express {
     // Initialize advisor context service for sanitization
     const contextService = createAdvisorContextService(contextBuilder);
 
+    // Dependencies for the deterministic AI planning/simulation tools (create_initial_budget,
+    // plan_next_month_budget, simulate_budget_change, simulate_purchase, analyze_budget_variance).
+    // All calculations happen in packages/ai/tool-implementations.ts and packages/domain services;
+    // this object only adapts existing repositories to the shape those functions expect.
+    const toolDeps: ToolDependencies = {
+        budgetService,
+        cashFlowService,
+        budgetRepo: {
+            findByPeriod: (householdId: EntityId, year: number, month: number) =>
+                budgetRepo.findByHouseholdAndPeriod(householdId, year, month),
+            findByHouseholdIdRange: async (householdId: EntityId, startYear: number, startMonth: number, endYear: number, endMonth: number) => {
+                const results: Budget[] = [];
+                for (let y = startYear; y <= endYear; y++) {
+                    const from = y === startYear ? startMonth : 1;
+                    const to = y === endYear ? endMonth : 12;
+                    for (let m = from; m <= to; m++) {
+                        results.push(...(await budgetRepo.findByHouseholdAndPeriod(householdId, y, m)));
+                    }
+                }
+                return results;
+            },
+        },
+        transactionRepo: {
+            findByHouseholdAndPeriod: async (householdId: EntityId, year: number, month: number) => {
+                const fromDate = new Date(year, month - 1, 1);
+                const toDate = new Date(year, month, 1);
+                const transactions = await cashFlowRepo.getTransactionsForRange(householdId, fromDate, toDate);
+                return transactions.map(t => ({ id: t.id, category: t.category, amountCents: t.amountCents, transactionDate: t.transactionDate }));
+            },
+            findByHouseholdDateRange: async (householdId: EntityId, startDate: Date, endDate: Date) => {
+                const transactions = await cashFlowRepo.getTransactionsForRange(householdId, startDate, endDate);
+                return transactions.map(t => ({ id: t.id, category: t.category, amountCents: t.amountCents, transactionDate: t.transactionDate }));
+            },
+        },
+        settingsRepo: {
+            findByHouseholdId: (householdId: EntityId) => settingsRepo.findByHouseholdId(householdId),
+        },
+        recurringPatternsRepo: {
+            // Recurring pattern detection is not yet persisted; treated as empty until implemented.
+            findByHouseholdId: async () => [],
+        },
+        snapshotRepo: {
+            findLatestByHouseholdId: (householdId: EntityId) => snapshotRepo.findLatestByHouseholdId(householdId),
+        },
+    };
+
     // Initialize privacy gateway
     const privacyGateway = new PrivacyGateway();
     setPrivacyGateway(privacyGateway);
@@ -311,18 +365,40 @@ export function createServer(): Express {
         if (process.env.ANTHROPIC_API_KEY) {
             llmProvider = createDefaultLLMProvider();
         } else {
-            // For testing environments without API key, use a no-op provider
-            console.warn("[AI_ORCHESTRATOR] No ANTHROPIC_API_KEY - AI features will be limited");
+            // For environments without an LLM API key, fall back to a deterministic template
+            // response built from the recommendations already produced by the domain services
+            // (never invents numbers - only phrases what the tools already calculated).
+            console.warn("[AI_ORCHESTRATOR] No ANTHROPIC_API_KEY - using deterministic fallback responses");
             llmProvider = {
-                getName: () => "noop",
+                getName: () => "deterministic-fallback",
                 getConfig: () => ({}),
                 getMaxContextTokens: () => 100000,
                 validateRequest: () => true,
-                generateResponse: async () => ({
-                    correlationId: "",
-                    message: "AI features not available",
-                    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-                }),
+                generateResponse: async (request: { messages: Array<{ role: string; content: string }> }) => {
+                    const userMessage = request.messages.find((m) => m.role === "user")?.content ?? "";
+                    const contextMatch = userMessage.match(/Financial context[^:]*:\s*([\s\S]*?)\n\nPlease provide/);
+                    let content = "Here is what I found based on your household's data.";
+                    if (contextMatch) {
+                        try {
+                            const parsed = JSON.parse(contextMatch[1]);
+                            const recommendations: string[] = [];
+                            for (const value of Object.values(parsed.tools ?? {})) {
+                                const recs = (value as Record<string, unknown>)?.recommendations;
+                                if (Array.isArray(recs)) recommendations.push(...recs.filter((r) => typeof r === "string"));
+                            }
+                            content = recommendations.length > 0
+                                ? recommendations.join(" ")
+                                : "I reviewed your latest financial data and didn't find anything that needs immediate attention.";
+                        } catch {
+                            // Keep default content if context parsing fails
+                        }
+                    }
+                    return {
+                        correlationId: "",
+                        content,
+                        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+                    };
+                },
             };
         }
     } catch (error) {
@@ -417,25 +493,44 @@ export function createServer(): Express {
     });
 
     toolExecutor.registerTool("simulate_purchase", async (params: Record<string, unknown>, context) => {
-        const { amount } = params;
-        return { simulationResult: { amount, impactedAccounts: [] } };
+        const householdId = context.householdId;
+        const purchaseAmountCents = (params.purchaseAmountCents as number) ?? 0;
+        const paymentMethod = (params.paymentMethod as "CASH" | "CREDIT_CARD" | "LOAN" | "SAVINGS") ?? "CASH";
+        const description = (params.description as string) ?? "this purchase";
+        return simulatePurchase(
+            householdId,
+            purchaseAmountCents as Money,
+            paymentMethod,
+            description,
+            toolDeps,
+            { category: params.category as string | undefined }
+        ) as unknown as Record<string, unknown>;
     });
 
     toolExecutor.registerTool("simulate_budget_change", async (params: Record<string, unknown>, context) => {
-        const { changes } = params;
-        return { simulationResult: { changes, projectedImpact: {} } };
+        const householdId = context.householdId;
+        const changes = (params.changes as Array<{ category: string; newBudgetCents: number }>) ?? [];
+        return simulateBudgetChange(
+            householdId,
+            changes.map((c) => ({ category: c.category, newBudgetCents: c.newBudgetCents as Money })),
+            toolDeps,
+            { month: params.month as string | undefined }
+        ) as unknown as Record<string, unknown>;
     });
 
     toolExecutor.registerTool("analyze_budget_variance", async (params: Record<string, unknown>, context) => {
         const householdId = context.householdId;
-        const now = new Date();
-        const budgets = await budgetRepo.findByHouseholdAndPeriod(householdId, now.getFullYear(), now.getMonth() + 1);
-        return budgets.length > 0 ? { variance: {} } : { error: "No budget found" };
+        return analyzeBudgetVariance(householdId, toolDeps, {
+            categories: params.categories as string[] | undefined,
+            months: params.months as number | undefined,
+        }) as unknown as Record<string, unknown>;
     });
 
     toolExecutor.registerTool("plan_next_month_budget", async (params: Record<string, unknown>, context) => {
         const householdId = context.householdId;
-        return { plan: { householdId, month: new Date() } };
+        return planNextMonthBudget(householdId, toolDeps, {
+            knownUpcomingExpenses: params.knownUpcomingExpenses as Array<{ description: string; estimatedAmountCents: Money; category: string }> | undefined,
+        }) as unknown as Record<string, unknown>;
     });
 
     toolExecutor.registerTool("create_initial_budget", async (params: Record<string, unknown>, context) => {
@@ -443,7 +538,9 @@ export function createServer(): Express {
             throw new Error("Only household owners can create budgets");
         }
         const householdId = context.householdId;
-        return { budgetId: "new-budget-id", created: true };
+        const now = new Date();
+        const month = (params.month as string) ?? `${now.getFullYear()}-${now.getMonth() + 1}`;
+        return createInitialBudget(householdId, month, toolDeps) as unknown as Record<string, unknown>;
     });
 
     // Initialize AI Orchestrator
@@ -2649,6 +2746,8 @@ export function createServer(): Express {
     };
 
     registerBudgetApprovalRoutes(approvalRouteContext);
+    registerAdvisorConversationRoutes(approvalRouteContext);
+    registerOrchestratorRoutes(approvalRouteContext);
 
     /**
      * 404 handler

@@ -533,3 +533,109 @@ export async function fetchSnapshotHistory(months: number): Promise<SnapshotHist
 export async function fetchBudgetVarianceHistory(months: number): Promise<BudgetVarianceHistory> {
     return apiFetch<BudgetVarianceHistory>(`/history/budget-variance?months=${months}`);
 }
+
+// ── AI Advisor ──────────────────────────────────────────────────────────────
+
+// Slice 1 seed data: household owner "Sean" (see packages/db/migrations/002_seed_tucker_household.sql)
+const MEMBER_ID = "550e8400-e29b-41d4-a716-446655440001";
+
+export type AdvisorUxMode = "INFORMATION" | "DIAGNOSIS" | "PLANNING" | "SCENARIO";
+
+export interface ClassifiedIntent {
+    type: string;
+    category: string;
+    confidence: number;
+    reasoning: string;
+}
+
+export interface AvailableTool {
+    name: string;
+    description: string;
+}
+
+export interface ClassifyMessageResponse {
+    userMessageId: string;
+    systemMessageId?: string;
+    assistantMessageId?: string;
+    assistantMessage?: string;
+    intent: ClassifiedIntent | string;
+    availableTools: AvailableTool[];
+    workflowDescription?: string;
+    out_of_scope: boolean;
+}
+
+export interface AdvisorToolResult {
+    friendlyActivity: string;
+    success: boolean;
+    durationMs: number;
+    error?: string;
+    data?: Record<string, unknown>;
+}
+
+export interface OrchestrateResponse {
+    messageId: string;
+    assistantMessage: string;
+    mode: AdvisorUxMode;
+    metadata: {
+        workflowType: string;
+        toolsExecuted: number;
+        totalDurationMs: number;
+    };
+    toolResults: AdvisorToolResult[];
+}
+
+async function apiPost<T>(path: string, body: unknown): Promise<T> {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+        method: "POST",
+        headers: getApiHeaders(),
+        body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody.userMessage || errorBody.error || errorBody.message || `Request failed: ${path}`);
+    }
+    return response.json();
+}
+
+export async function createAdvisorConversation(title?: string): Promise<{ id: string }> {
+    return apiPost<{ id: string }>("/conversations", { memberId: MEMBER_ID, title });
+}
+
+export async function sendAdvisorMessage(conversationId: string, content: string): Promise<ClassifyMessageResponse> {
+    return apiPost<ClassifyMessageResponse>(`/conversations/${conversationId}/messages`, { content });
+}
+
+export async function orchestrateAdvisorResponse(
+    conversationId: string,
+    workflowType: string
+): Promise<OrchestrateResponse> {
+    return apiPost<OrchestrateResponse>(`/conversations/${conversationId}/orchestrate`, {
+        workflowType,
+        financialContext: {},
+    });
+}
+
+export interface ProposedChange {
+    category: string;
+    proposedBudgetCents: number;
+    currentBudgetCents: number;
+    reason: string;
+}
+
+export async function createBudgetProposal(
+    periodYear: number,
+    periodMonth: number,
+    proposedChanges: ProposedChange[],
+    options?: { title?: string; description?: string; conversationId?: string }
+): Promise<{ proposal: { id: string } }> {
+    return apiPost(`/household/budget-proposals`, {
+        periodYear,
+        periodMonth,
+        proposedChanges,
+        ...options,
+    });
+}
+
+export async function approveBudgetProposal(proposalId: string, comment?: string): Promise<unknown> {
+    return apiPost(`/household/budget-proposals/${proposalId}/approve`, { comment });
+}
