@@ -25,6 +25,7 @@ import DebtSection from "./components/DebtSection";
 import TrendsSection from "./components/TrendsSection";
 import StatementUpload from "./components/StatementUpload";
 import AdvisorSection from "./components/Advisor/AdvisorSection";
+import AdvisorErrorBoundary from "./components/Advisor/AdvisorErrorBoundary";
 import "./App.css";
 
 function App() {
@@ -114,7 +115,9 @@ function App() {
                 </div>
                 {showUpload && <StatementUpload />}
 
-                <AdvisorSection />
+                <AdvisorErrorBoundary>
+                    <AdvisorSection />
+                </AdvisorErrorBoundary>
 
                 {health && <StatusBanner health={health} />}
                 {health && <AttentionSection items={health.attentionItems} />}

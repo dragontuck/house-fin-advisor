@@ -157,17 +157,9 @@ export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext
                 const orchestrator = getAIOrchestrator();
                 const orchestratorResponse = await orchestrator.processRequest(orchestratorRequest);
 
-                // Check if processing was successful
-                if (!orchestratorResponse.success) {
-                    throw new OrchestratorError(
-                        500,
-                        "Failed to process request through orchestrator",
-                        "ORCHESTRATION_FAILED",
-                        orchestratorResponse.error
-                    );
-                }
-
-                // Store the assistant message in conversation
+                // A graceful failure (LLM unavailable, privacy rejection, stale data, etc.) still
+                // has a safe, user-facing message - store and return it rather than a 500. The
+                // dashboard and rest of the app are unaffected either way.
                 const assistantMessage = await advisorService.addMessage({
                     conversationId: conversationId as EntityId,
                     role: AdvisorMessageRole.ASSISTANT,
@@ -203,6 +195,9 @@ export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext
                     messageId: assistantMessage.id,
                     assistantMessage: orchestratorResponse.assistantMessage,
                     mode: getUxMode(orchestratorResponse.metadata.workflowType),
+                    success: orchestratorResponse.success,
+                    failureCategory: orchestratorResponse.metadata.failureCategory,
+                    retryable: orchestratorResponse.metadata.retryable ?? false,
                     metadata: {
                         workflowType: orchestratorResponse.metadata.workflowType,
                         toolsExecuted: orchestratorResponse.metadata.toolsExecuted,

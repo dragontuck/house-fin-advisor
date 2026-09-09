@@ -97,3 +97,13 @@ export {
     type GroundingViolation,
     type GroundingViolationType,
 } from "./response-grounding";
+
+export {
+    AdvisorFailureCategory,
+    buildAdvisorFailure,
+    classifyLLMError,
+    classifyPrivacyError,
+    classifyCriticalToolFailure,
+    classifyStaleSnapshot,
+    type AdvisorFailure,
+} from "./graceful-failure";

@@ -576,6 +576,11 @@ export interface OrchestrateResponse {
     messageId: string;
     assistantMessage: string;
     mode: AdvisorUxMode;
+    success: boolean;
+    /** Present when success is false - identifies why, drives no UI copy directly. */
+    failureCategory?: string;
+    /** Whether the UI should offer a [Try Again] action. */
+    retryable: boolean;
     metadata: {
         workflowType: string;
         toolsExecuted: number;

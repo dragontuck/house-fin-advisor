@@ -31,13 +31,15 @@ const SUGGESTED_PROMPTS: Array<{ group: string; prompts: string[] }> = [
 interface Exchange {
     id: string;
     question: string;
-    status: "working" | "done" | "out_of_scope" | "error";
+    status: "working" | "done" | "out_of_scope" | "error" | "failed";
     workingActivities: string[];
     assistantMessage?: string;
     mode?: AdvisorUxMode;
     toolResults?: AdvisorToolResult[];
     conversationId?: string;
+    workflowType?: string;
     errorMessage?: string;
+    retryable?: boolean;
 }
 
 export default function AdvisorSection() {
@@ -51,6 +53,27 @@ export default function AdvisorSection() {
         const conversation = await createAdvisorConversation("Financial Planning Discussion");
         setConversationId(conversation.id);
         return conversation.id;
+    }
+
+    async function runOrchestration(exchangeId: string, convoId: string, workflowType: string) {
+        const response = await orchestrateAdvisorResponse(convoId, workflowType);
+
+        setExchanges((prev) =>
+            prev.map((e) =>
+                e.id === exchangeId
+                    ? {
+                        ...e,
+                        status: response.success ? "done" : "failed",
+                        assistantMessage: response.assistantMessage,
+                        mode: response.mode,
+                        toolResults: response.toolResults,
+                        conversationId: convoId,
+                        workflowType,
+                        retryable: response.retryable,
+                    }
+                    : e
+            )
+        );
     }
 
     async function ask(question: string) {
@@ -87,22 +110,7 @@ export default function AdvisorSection() {
 
             const workflowType =
                 typeof classification.intent === "string" ? classification.intent : classification.intent.type;
-            const response = await orchestrateAdvisorResponse(convoId, workflowType);
-
-            setExchanges((prev) =>
-                prev.map((e) =>
-                    e.id === exchangeId
-                        ? {
-                            ...e,
-                            status: "done",
-                            assistantMessage: response.assistantMessage,
-                            mode: response.mode,
-                            toolResults: response.toolResults,
-                            conversationId: convoId,
-                        }
-                        : e
-                )
-            );
+            await runOrchestration(exchangeId, convoId, workflowType);
         } catch (err) {
             setExchanges((prev) =>
                 prev.map((e) =>
@@ -120,6 +128,37 @@ export default function AdvisorSection() {
             setBusy(false);
         }
     }
+
+    async function retry(exchange: Exchange) {
+        if (busy || !exchange.conversationId || !exchange.workflowType) return;
+        setBusy(true);
+        setExchanges((prev) =>
+            prev.map((e) =>
+                e.id === exchange.id
+                    ? { ...e, status: "working", workingActivities: ["Trying again..."] }
+                    : e
+            )
+        );
+        try {
+            await runOrchestration(exchange.id, exchange.conversationId, exchange.workflowType);
+        } catch (err) {
+            setExchanges((prev) =>
+                prev.map((e) =>
+                    e.id === exchange.id
+                        ? {
+                            ...e,
+                            status: "error",
+                            errorMessage:
+                                "Something went wrong while getting your answer. Please try again in a moment.",
+                        }
+                        : e
+                )
+            );
+        } finally {
+            setBusy(false);
+        }
+    }
+
 
     return (
         <section className="dashboard-section advisor-section">
@@ -190,6 +229,23 @@ export default function AdvisorSection() {
                         )}
 
                         {exchange.status === "error" && <p className="advisor-error">{exchange.errorMessage}</p>}
+
+                        {exchange.status === "failed" && (
+                            <div className="advisor-card">
+                                <p className="advisor-answer">{exchange.assistantMessage}</p>
+                                {exchange.retryable && (
+                                    <div className="advisor-actions">
+                                        <button
+                                            className="advisor-button advisor-button-primary"
+                                            onClick={() => retry(exchange)}
+                                            disabled={busy}
+                                        >
+                                            Try Again
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {exchange.status === "done" && exchange.mode && exchange.toolResults && (
                             <AdvisorResponseCard

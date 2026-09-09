@@ -26,6 +26,15 @@ import { AIToolExecutor, ToolExecutionContext, ToolExecutionResult } from "./ai-
 import { LLMProvider, LLMRequest, LLMResponse, LLMProviderError } from "./llm-provider";
 import { PrivacyGateway, getPrivacyGateway } from "@house-fin/security";
 import { validateGroundedResponse, buildSafeFallback, GroundingViolation } from "./response-grounding";
+import {
+    AdvisorFailure,
+    buildAdvisorFailure,
+    AdvisorFailureCategory,
+    classifyLLMError,
+    classifyPrivacyError,
+    classifyCriticalToolFailure,
+    classifyStaleSnapshot,
+} from "./graceful-failure";
 
 /**
  * Request to process by orchestrator
@@ -78,6 +87,10 @@ export interface OrchestratorResponse {
         groundingPassed?: boolean;
         /** Violation types detected, if grounding failed and a safe fallback was substituted */
         groundingViolations?: string[];
+        /** Category of graceful failure, if the request could not be completed safely */
+        failureCategory?: AdvisorFailureCategory;
+        /** Whether the frontend should offer a [Try Again] action for this failure */
+        retryable?: boolean;
     };
 }
 
@@ -122,6 +135,14 @@ export class AIOrchestrator {
                 executionContext
             );
 
+            // Step 4.5: Never narrate around missing/broken critical data or stale figures -
+            // stop here with a plain, honest message instead of calling the LLM at all.
+            const preflightFailure =
+                classifyCriticalToolFailure(plan.tools, toolResults) ?? classifyStaleSnapshot(toolResults);
+            if (preflightFailure) {
+                return this.buildFailureResponse(request, toolResults, preflightFailure, startTime);
+            }
+
             // Step 5: Extract results for LLM
             const toolResultsForLLM = this.toolExecutor.getResultsForLLM(toolResults, plan.tools);
 
@@ -132,18 +153,38 @@ export class AIOrchestrator {
             );
 
             // Step 7: Sanitize context through privacy gateway
-            const sanitizedContext = this.privacyGateway.sanitizeContextForLLM(
-                financialContext,
-                request.correlationId
-            );
+            let sanitizedContext: Record<string, unknown>;
+            try {
+                sanitizedContext = this.privacyGateway.sanitizeContextForLLM(
+                    financialContext,
+                    request.correlationId
+                );
+            } catch {
+                // Never surface which privacy rule matched - only that the data can't be sent.
+                return this.buildFailureResponse(request, toolResults, classifyPrivacyError(), startTime);
+            }
 
             // Step 8: Call LLM with sanitized context
-            const llmResponse = await this.callLLM(
-                request.userMessage,
-                sanitizedContext,
-                plan,
-                request.correlationId
-            );
+            let llmResponse: LLMResponse;
+            try {
+                llmResponse = await this.callLLM(
+                    request.userMessage,
+                    sanitizedContext,
+                    plan,
+                    request.correlationId
+                );
+            } catch (error) {
+                return this.buildFailureResponse(request, toolResults, classifyLLMError(error), startTime);
+            }
+
+            if (!llmResponse.content || llmResponse.content.trim().length === 0) {
+                return this.buildFailureResponse(
+                    request,
+                    toolResults,
+                    buildAdvisorFailure(AdvisorFailureCategory.LLM_MALFORMED_RESPONSE),
+                    startTime
+                );
+            }
 
             // Step 9: Validate response is grounded in tool results; substitute a safe,
             // deterministic fallback if the LLM said anything unsupported.
@@ -171,10 +212,15 @@ export class AIOrchestrator {
             };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
+            // Unforeseen failure (e.g. unknown workflow type) - fall back to the most generic,
+            // still-honest copy rather than ever showing a raw error to the user.
+            const failure = buildAdvisorFailure(AdvisorFailureCategory.LLM_UNAVAILABLE);
+
+            console.error("[ADVISOR_UNEXPECTED_FAILURE]", { correlationId: request.correlationId, errorMessage });
 
             return {
                 correlationId: request.correlationId,
-                assistantMessage: "",
+                assistantMessage: failure.userMessage,
                 toolResults: this.toolExecutor.getExecutionHistory(),
                 success: false,
                 error: errorMessage,
@@ -182,9 +228,42 @@ export class AIOrchestrator {
                     workflowType: request.workflowType,
                     toolsExecuted: 0,
                     totalDurationMs: Date.now() - startTime,
+                    failureCategory: failure.category,
+                    retryable: failure.retryable,
                 },
             };
         }
+    }
+
+    /**
+     * Builds a graceful-failure OrchestratorResponse - never invents data, never leaks
+     * internal details, always gives the user a plain, honest message to act on.
+     */
+    private buildFailureResponse(
+        request: OrchestratorRequest,
+        toolResults: ToolExecutionResult[],
+        failure: AdvisorFailure,
+        startTime: number
+    ): OrchestratorResponse {
+        console.warn("[ADVISOR_GRACEFUL_FAILURE]", {
+            correlationId: request.correlationId,
+            category: failure.category,
+        });
+
+        return {
+            correlationId: request.correlationId,
+            assistantMessage: failure.userMessage,
+            toolResults,
+            success: false,
+            error: failure.category,
+            metadata: {
+                workflowType: request.workflowType,
+                toolsExecuted: toolResults.filter((r) => r.success).length,
+                totalDurationMs: Date.now() - startTime,
+                failureCategory: failure.category,
+                retryable: failure.retryable,
+            },
+        };
     }
 
     /**
@@ -339,15 +418,12 @@ Please provide thoughtful financial advice based on the data above.`;
      * reach the user. An ungrounded response (unsupported numbers, fabricated accounts,
      * fabricated research, unsupported assumptions, or contradictions with tool output)
      * is never shown - it's replaced with a safe fallback built only from tool results.
+     * Empty/malformed responses are handled earlier in processRequest, before this runs.
      */
     private validateResponse(
         response: LLMResponse,
         toolResults: ToolExecutionResult[]
     ): { content: string; groundingPassed: boolean; violations: GroundingViolation[] } {
-        if (!response.content || response.content.trim().length === 0) {
-            throw new Error("LLM returned empty response");
-        }
-
         const grounding = validateGroundedResponse(response.content, toolResults);
         if (grounding.valid) {
             return { content: response.content, groundingPassed: true, violations: [] };
