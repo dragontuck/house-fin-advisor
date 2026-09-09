@@ -535,3 +535,353 @@ export interface FreshnessAssessment {
     recommendation: string; // e.g., "Consider refreshing this data"
     requiresVerification: boolean; // Must be re-verified?
 }
+
+/**
+ * Scenario types for financial recommendations
+ *
+ * Scenarios explore the impact of financial decisions or events.
+ * Each scenario type has different inputs and uses different financial services.
+ */
+export enum ScenarioType {
+    WINDFALL = "WINDFALL",
+    SURPRISE_EXPENSE = "SURPRISE_EXPENSE",
+    SAVINGS_ALLOCATION = "SAVINGS_ALLOCATION",
+    DEBT_ACTION = "DEBT_ACTION",
+    BUDGET_CHANGE = "BUDGET_CHANGE",
+    GOAL_PRIORITY = "GOAL_PRIORITY",
+    CASH_ALLOCATION = "CASH_ALLOCATION",
+    AFFORDABILITY = "AFFORDABILITY",
+    FINANCIAL_INDEPENDENCE = "FINANCIAL_INDEPENDENCE",
+}
+
+/**
+ * Baseline state for a scenario
+ *
+ * Represents the current financial position before any proposed action.
+ * Extracted from the financial snapshot.
+ */
+export interface ScenarioBaseline {
+    // Account balances
+    emergencyFundBalance: Money; // Total in emergency fund accounts
+    emergencyFundTarget: Money; // Desired emergency fund amount
+    emergencyFundMonths: number; // Months of expenses covered
+
+    // Debt situation
+    totalDebt: Money; // All debt balances combined
+    debtToIncomeRatio: number; // Total debt / monthly income
+    highestInterestRate: number; // Highest APR among debts
+    monthlyDebtPayments: Money; // Total minimum payments
+
+    // Cash flow
+    monthlyIncome: Money;
+    monthlyExpenses: Money;
+    monthlySavingsCapacity: Money; // Income - expenses
+
+    // Goals
+    activeGoals: number;
+    goalFundingGap: Money; // Total shortfall across all goals
+    retirementYearsAway: number;
+
+    // Health
+    financialHealthScore: number; // 0-100
+    healthStatus: FinancialHealthStatus;
+}
+
+/**
+ * A single action proposed in a scenario
+ *
+ * Example:
+ * - Allocate $5,000 to emergency fund
+ * - Pay down credit card with 22% APR by $3,000
+ * - Increase monthly savings to $1,200
+ */
+export interface ScenarioAction {
+    id: string; // Deterministic ID
+    title: string; // e.g., "Allocate $5,000 to emergency fund"
+    description: string; // More detailed explanation
+    accountId?: EntityId; // Which account to affect
+    amount?: Money; // How much (for transfers, payments, allocations)
+    percentOfAmount?: number; // Or as percentage (0-100)
+    frequencyMonths?: number; // If recurring, how often?
+}
+
+/**
+ * Impact assessment for a scenario
+ *
+ * Quantifies how the scenario affects key financial metrics.
+ */
+export interface ScenarioImpact {
+    // Timing
+    immediatelyAffected: boolean; // Happens now vs over time?
+    timeframeMonths?: number; // How many months to full impact?
+
+    // Financial effects
+    cashFlowImpact: Money; // Change in monthly cash flow
+    debtReduction: Money; // How much debt is paid
+    emergencyFundIncrease: Money; // How much EF grows
+    investmentIncrease: Money; // How much investment grows
+    savingsIncrease: Money; // How much savings grow
+    wealthIncrease: Money; // Total net worth change
+
+    // Ratio improvements
+    debtToIncomeChange: number; // Percentage point change
+    healthScoreChange: number; // Points gained/lost
+    emergencyFundMonthsChange: number; // Months of coverage gained
+
+    // Risk adjustments
+    riskReduction: "HIGH" | "MEDIUM" | "LOW" | "NONE";
+    flexibilityChange: "INCREASED" | "MAINTAINED" | "REDUCED"; // Can they still change course?
+    liquidityChange: "IMPROVED" | "MAINTAINED" | "DECREASED";
+}
+
+/**
+ * Resulting financial state after a scenario is implemented
+ *
+ * Projection of where the household would be if they took the proposed action.
+ */
+export interface ScenarioResultingState {
+    // Account balances after action
+    emergencyFundBalance: Money;
+    emergencyFundMonths: number;
+
+    // Debt position
+    totalDebt: Money;
+    debtToIncomeRatio: number;
+    monthlyDebtPayments: Money;
+
+    // Cash flow
+    monthlySavingsCapacity: Money;
+    monthlyAllocableAmount: Money; // How much can go to goals/investing?
+
+    // Goals
+    goalFundingGap: Money; // Remaining shortfall
+    goalsOnTrack: number; // How many goals now achievable?
+
+    // Overall health
+    financialHealthScore: number;
+    healthStatus: FinancialHealthStatus;
+
+    // Metadata
+    achievedAt?: Date; // When this state is reached
+    requiresMonthlyCommitment?: Money; // Ongoing commitment needed?
+}
+
+/**
+ * Assumption used in scenario generation
+ *
+ * Example:
+ * - "Income remains stable at $6,000/month"
+ * - "Interest rates stay constant"
+ * - "No new debt incurred"
+ */
+export interface ScenarioAssumption {
+    key: string; // Machine-readable: "income_stable", "no_new_debt"
+    statement: string; // Human-readable: "Monthly income remains constant"
+    confidence: ConfidenceLevel; // How confident are we?
+    impact: "HIGH" | "MEDIUM" | "LOW"; // How much does this affect the outcome?
+}
+
+/**
+ * Sensitivity analysis: how sensitive is the outcome to assumptions?
+ *
+ * Tests: "What if income drops 10%?" or "What if interest rates rise?"
+ * Shows which assumptions matter most.
+ */
+export interface ScenarioSensitivity {
+    assumptionKey: string; // Which assumption to test
+    scenarios: Array<{
+        change: string; // e.g., "Income -10%", "Interest rate +1%"
+        resultingHealthScore: number;
+        resultingDebtRatio: number;
+        stillAchievesGoal: boolean;
+        recommendation: string; // Should they proceed if this happens?
+    }>;
+}
+
+/**
+ * Complete scenario definition
+ *
+ * A scenario is a self-contained analysis of one decision:
+ * "If we do X, here's what happens: Y"
+ *
+ * Key properties:
+ * - Deterministic: same snapshot always produces same scenarios
+ * - Immutable: scenarios don't change once generated
+ * - Traceable: lineage to snapshot and calculation version
+ * - Independent: doesn't affect household state
+ */
+export interface Scenario {
+    id: EntityId; // Unique ID for this scenario
+    householdId: EntityId;
+    financialSnapshotId: EntityId; // From which snapshot?
+    financialSnapshotVersion: number;
+
+    type: ScenarioType;
+    title: string; // e.g., "Emergency Fund First: Use windfall to reach 6-month target"
+    description: string;
+
+    // Input data
+    input: {
+        [key: string]: any; // Type-specific input (see ScenarioInput unions below)
+    };
+
+    // Analysis
+    baseline: ScenarioBaseline;
+    proposedActions: ScenarioAction[];
+    impact: ScenarioImpact;
+    resultingState: ScenarioResultingState;
+
+    // Reasoning
+    assumptions: ScenarioAssumption[];
+    sensitivities: ScenarioSensitivity[];
+
+    // Ordering
+    order: number; // For presenting to user (A, B, C, etc.)
+    rationale: string; // Why this scenario is worth considering
+
+    // Metadata
+    calculationVersion: number; // Which financial service version?
+    policyVersion?: number; // Any policy applied?
+    createdAt: Date;
+
+    // Quality metrics
+    confidence: ConfidenceLevel;
+    dataCompleteness: number; // 0-100, how much data was available?
+}
+
+/**
+ * Request to generate scenarios for a windfall
+ *
+ * Example: "I got a $10,000 bonus"
+ */
+export interface WindfallScenarioInput {
+    amount: Money; // $10,000
+    source: string; // "Bonus", "Tax refund", "Inheritance", etc.
+    mustAllocateBy?: Date; // By when must this be allocated?
+    restrictions?: string; // Any constraints?
+}
+
+/**
+ * Request to generate scenarios for a surprise expense
+ *
+ * Example: "My car needs a $3,000 repair"
+ */
+export interface SurpriseExpenseScenarioInput {
+    amount: Money; // $3,000
+    category: string; // "Car", "Medical", "Home", etc.
+    isRecurring: boolean; // One-time or regular?
+    mustPayBy?: Date; // Deadline?
+}
+
+/**
+ * Request to generate scenarios for savings allocation
+ *
+ * Example: "I can save an extra $500/month"
+ */
+export interface SavingsAllocationScenarioInput {
+    monthlyAmount: Money; // $500
+    monthsAvailable: number; // For how long can you maintain this?
+    purpose?: string; // Goal or general savings?
+}
+
+/**
+ * Request to generate debt action scenarios
+ *
+ * Example: "Should I pay off my credit card?"
+ */
+export interface DebtActionScenarioInput {
+    debtId?: EntityId; // Specific debt to target
+    debtType?: string; // Or: "credit_card", "personal_loan", etc.
+    action: "ACCELERATED_PAYOFF" | "SNOWBALL" | "AVALANCHE" | "CONSOLIDATE";
+    extraPayment?: Money; // How much extra can you pay?
+}
+
+/**
+ * Request to generate budget change scenarios
+ *
+ * Example: "Can we reduce spending by $200/month?"
+ */
+export interface BudgetChangeScenarioInput {
+    categories?: {
+        [category: string]: Money; // Changes by category
+    };
+    targetReduction?: Money; // Or just a total target
+    affectedMonths: number; // For how long?
+}
+
+/**
+ * Request to generate goal priority scenarios
+ *
+ * Example: "Should I prioritize my down payment savings?"
+ */
+export interface GoalPriorityScenarioInput {
+    goalId?: EntityId; // Which goal to prioritize?
+    increaseAllocationTo?: Money; // New monthly amount?
+    affectOtherGoals?: boolean; // Reduce other goal funding?
+}
+
+/**
+ * Request to generate cash allocation scenarios
+ *
+ * Example: "I have $8,000 available. How should I split it?"
+ */
+export interface CashAllocationScenarioInput {
+    availableAmount: Money; // Total to allocate
+    options?: string[]; // Suggested buckets (EF, debt, goals, investment)
+}
+
+/**
+ * Request to generate affordability scenarios
+ *
+ * Example: "Can we afford a $1,500/month car payment?"
+ */
+export interface AffordabilityScenarioInput {
+    newMonthlyObligation: Money; // $1,500
+    itemDescription: string; // "Car", "Home", "Childcare"
+    downPaymentAvailable?: Money; // If applicable
+}
+
+/**
+ * Request to generate financial independence impact scenarios
+ *
+ * Example: "What if I save an extra $10k/year for retirement?"
+ */
+export interface FinancialIndependenceScenarioInput {
+    yearsToRetirement?: number;
+    additionalAnnualSavings?: Money;
+    retirementIncomeNeeded?: Money;
+    strategy?: "AGGRESSIVE" | "MODERATE" | "CONSERVATIVE";
+}
+
+/**
+ * Request to generate scenarios
+ *
+ * Contains input specific to scenario type.
+ */
+export type ScenarioInput =
+    | WindfallScenarioInput
+    | SurpriseExpenseScenarioInput
+    | SavingsAllocationScenarioInput
+    | DebtActionScenarioInput
+    | BudgetChangeScenarioInput
+    | GoalPriorityScenarioInput
+    | CashAllocationScenarioInput
+    | AffordabilityScenarioInput
+    | FinancialIndependenceScenarioInput;
+
+/**
+ * Response from scenario generation
+ *
+ * Returns multiple scenarios (alternatives) for the user to consider.
+ */
+export interface GenerateScenarioResponse {
+    householdId: EntityId;
+    financialSnapshotId: EntityId;
+    scenarioType: ScenarioType;
+    scenarios: Scenario[];
+    summary: {
+        totalScenarios: number;
+        recommendedFirstAlternative: EntityId; // Which is best?
+        tradeoffSummary: string; // Quick explanation of tradeoffs
+    };
+}

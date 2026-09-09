@@ -522,3 +522,13 @@ export {
     detectConflict,
 } from "./research-evidence-service";
 
+// ── Slice 5: Scenario Generation ───────────────────────────────────────────
+// Generate structured scenarios for financial decisions
+export {
+    extractBaseline,
+    generateWindfallScenarios,
+    generateSavingsAllocationScenarios,
+    generateDebtActionScenarios,
+    generateAffordabilityScenarios,
+    generateFinancialIndependenceScenarios,
+} from "./scenario-service";
