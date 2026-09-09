@@ -67,11 +67,43 @@ export interface AdversarialChallenge {
     | "MISSING_DEBT"
     | "OUTDATED_TERMS"
     | "HIDDEN_COST"
-    | "TIMING_RISK";
+    | "TIMING_RISK"
+    | "PROVIDER_CONFLICT"
+    | "UNDISCLOSED_FEES"
+    | "MARKETING_LANGUAGE"
+    | "ASYMMETRIC_ANALYSIS"
+    | "INFORMATION_BIAS";
     scenario: string; // Plausible scenario
     impact: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"; // How bad if it happens?
     likelihood: "UNLIKELY" | "POSSIBLE" | "LIKELY" | "PROBABLE";
     recommendation?: string; // What should user do instead?
+}
+
+/**
+ * Product analysis for financial products
+ */
+export interface ProductAnalysis {
+    productName: string;
+    benefit: string; // Primary benefit
+    cost: Money | null; // Direct cost or null if unknown
+    fee?: string; // Fee structure if any
+    limitation: string; // Key limitation
+    alternative?: string; // Comparable alternative
+    reasonForPreference?: string; // Why this over alternatives?
+}
+
+/**
+ * Conflict and bias analysis
+ */
+export interface ConflictAnalysis {
+    hasProviderConflict: boolean; // Recommender has financial interest?
+    isProductSpecific: boolean; // Names specific product?
+    hasFeeInformation: boolean; // Costs are disclosed?
+    hasMarketingLanguage: boolean; // Uses persuasive language?
+    hasHiddenAssumptions: boolean; // Assumptions not stated?
+    hasAsymmetricDownside: boolean; // Disproportionate downside?
+    isOnesSidedAnalysis: boolean; // Alternatives analyzed equally?
+    productAnalyses?: ProductAnalysis[]; // For each material product
 }
 
 /**
@@ -177,6 +209,9 @@ export function validateRecommendation(input: ValidatorInput): ValidationResult 
     warningChecks += biasCheck.warnings;
     if (biasCheck.weaknesses) {
         weaknesses.push(...biasCheck.weaknesses);
+    }
+    if (biasCheck.challenges) {
+        adversarialChallenges.push(...biasCheck.challenges);
     }
 
     // 8. DATA FRESHNESS
@@ -846,12 +881,17 @@ function assessDownside(input: ValidatorInput): {
 }
 
 /**
- * Detect bias
+ * Detect bias and conflicts
  *
- * Is the recommendation systematically favoring:
- * - A particular product or provider
- * - A particular financial behavior
- * - Overly aggressive or conservative strategy
+ * Comprehensive check for:
+ * - Provider conflicts
+ * - Unsupported product preferences
+ * - Fee-driven bias
+ * - Marketing language
+ * - Hidden assumptions
+ * - Disproportionate downside
+ * - One-sided alternative analysis
+ * - Information retrieval bias
  */
 function detectBias(input: ValidatorInput): {
     details: ValidationDetail[];
@@ -859,46 +899,151 @@ function detectBias(input: ValidatorInput): {
     failed: number;
     warnings: number;
     weaknesses?: string[];
+    challenges?: AdversarialChallenge[];
 } {
     const details: ValidationDetail[] = [];
     const weaknesses: string[] = [];
+    const challenges: AdversarialChallenge[] = [];
     let passed = 0;
     let failed = 0;
     let warnings = 0;
 
     const { candidate } = input;
 
-    // Check for product-specific recommendations without comparison
-    const hasProductName = /Chase|Bank|Wells Fargo|Citibank|American Express|Visa|MasterCard|Capital One|Ally|Marcus|Wealthfront|Vanguard|Fidelity|Schwab/i.test(
-        candidate.recommendedAction
-    );
-    const hasProviderSource = candidate.evidence.some(
-        (e) => e.sourceTier === "TIER_2_PROVIDER"
-    );
-
-    if (hasProductName && candidate.alternatives.length === 0) {
+    // 1. PROVIDER CONFLICT CHECK
+    const providerConflict = checkProviderConflict(candidate);
+    if (providerConflict.hasConflict) {
         details.push({
             category: "BIAS",
-            status: "WARN",
-            title: "Product-specific recommendation without comparison",
-            description: "Recommendation names specific provider without comparing alternatives",
-            severity: "WARNING",
+            status: providerConflict.severity === "HIGH" ? "FAIL" : "WARN",
+            title: "Provider conflict detected",
+            description: providerConflict.description,
+            severity: providerConflict.severity === "HIGH" ? "ERROR" : "WARNING",
         });
-        warnings++;
-        weaknesses.push("Recommends specific product without product comparison");
-    } else if (hasProductName && hasProviderSource && candidate.alternatives.length < 2) {
-        details.push({
-            category: "BIAS",
-            status: "WARN",
-            title: "Product-specific recommendation with provider source bias",
-            description: "Recommendation favors specific provider based on provider-sourced evidence",
-            severity: "WARNING",
-        });
-        warnings++;
-        weaknesses.push("Provider source bias in evidence");
+        if (providerConflict.severity === "HIGH") {
+            failed++;
+        } else {
+            warnings++;
+        }
+        weaknesses.push("Potential provider conflict");
+        if (providerConflict.challenge) {
+            challenges.push(providerConflict.challenge);
+        }
     }
 
-    // Check for aggressive strategy bias
+    // 2. PRODUCT ANALYSIS FOR MATERIAL RECOMMENDATIONS
+    const productAnalysis = analyzeProductRecommendation(candidate);
+    if (productAnalysis.issues.length > 0) {
+        productAnalysis.issues.forEach((issue) => {
+            details.push({
+                category: "BIAS",
+                status: issue.severity === "HIGH" ? "FAIL" : "WARN",
+                title: issue.title,
+                description: issue.description,
+                severity: issue.severity === "HIGH" ? "ERROR" : "WARNING",
+            });
+            if (issue.severity === "HIGH") {
+                failed++;
+            } else {
+                warnings++;
+            }
+            weaknesses.push(issue.weakness);
+        });
+    }
+
+    // 3. FEE BIAS CHECK
+    const feeBias = checkFeeBias(candidate);
+    if (feeBias.issues.length > 0) {
+        feeBias.issues.forEach((issue) => {
+            details.push({
+                category: "BIAS",
+                status: "WARN",
+                title: issue.title,
+                description: issue.description,
+                severity: "WARNING",
+            });
+            warnings++;
+            weaknesses.push(issue.weakness);
+        });
+    }
+
+    // 4. MARKETING LANGUAGE CHECK
+    const marketingLanguage = detectMarketingLanguage(candidate);
+    if (marketingLanguage.hasProblematicLanguage) {
+        details.push({
+            category: "BIAS",
+            status: "WARN",
+            title: "Persuasive language without evidence",
+            description: marketingLanguage.description,
+            severity: "WARNING",
+        });
+        warnings++;
+        weaknesses.push("Uses marketing language without sufficient evidence");
+    }
+
+    // 5. HIDDEN ASSUMPTIONS CHECK
+    const hiddenAssumptions = identifyHiddenAssumptions(candidate);
+    if (hiddenAssumptions.length > 0) {
+        details.push({
+            category: "BIAS",
+            status: "WARN",
+            title: "Implicit assumptions not disclosed",
+            description: `${hiddenAssumptions.length} assumptions appear implicit rather than explicit`,
+            severity: "WARNING",
+        });
+        warnings++;
+        weaknesses.push("Contains hidden or implicit assumptions");
+        hiddenAssumptions.forEach((assumption) => {
+            challenges.push({
+                type: "ASSUMPTION",
+                scenario: `If "${assumption}" changes`,
+                impact: "MEDIUM",
+                likelihood: "LIKELY",
+                recommendation: "Verify this assumption holds",
+            });
+        });
+    }
+
+    // 6. ASYMMETRIC DOWNSIDE CHECK
+    const asymmetricDownside = checkAsymmetricDownside(candidate);
+    if (asymmetricDownside.isAsymmetric) {
+        details.push({
+            category: "BIAS",
+            status: asymmetricDownside.isSevere ? "FAIL" : "WARN",
+            title: "Asymmetric risk presentation",
+            description: asymmetricDownside.description,
+            severity: asymmetricDownside.isSevere ? "ERROR" : "WARNING",
+        });
+        if (asymmetricDownside.isSevere) {
+            failed++;
+        } else {
+            warnings++;
+        }
+        weaknesses.push("Downside risks may be understated");
+    }
+
+    // 7. ONE-SIDED ALTERNATIVE ANALYSIS CHECK
+    const alternativeAnalysis = checkAlternativeAnalysis(candidate);
+    if (!alternativeAnalysis.isBalanced) {
+        details.push({
+            category: "BIAS",
+            status: "WARN",
+            title: "One-sided alternative analysis",
+            description: alternativeAnalysis.description,
+            severity: "WARNING",
+        });
+        warnings++;
+        weaknesses.push("Alternatives not analyzed with equal rigor");
+        challenges.push({
+            type: "ASYMMETRIC_ANALYSIS",
+            scenario: "What would make another option better?",
+            impact: "MEDIUM",
+            likelihood: "LIKELY",
+            recommendation: "Analyze alternatives with equal detail",
+        });
+    }
+
+    // 8a. CHECK FOR AGGRESSIVE STRATEGY WITHOUT DOWNSIDE
     const aggressiveKeywords = [
         "maximize",
         "aggressive",
@@ -927,7 +1072,7 @@ function detectBias(input: ValidatorInput): {
         weaknesses.push("Aggressive strategy not adequately stress-tested");
     }
 
-    // Check for conservative strategy bias
+    // 8b. CHECK FOR CONSERVATIVE STRATEGY BIAS
     const conservativeKeywords = [
         "safest",
         "minimize risk",
@@ -956,18 +1101,423 @@ function detectBias(input: ValidatorInput): {
         weaknesses.push("May favor status quo over opportunities");
     }
 
-    if (weaknesses.length === 0) {
+    // 8. INFORMATION RETRIEVAL BIAS CHECK
+    const infoBias = checkInformationRetrievalBias(candidate);
+    if (infoBias.hasBias) {
+        details.push({
+            category: "BIAS",
+            status: "WARN",
+            title: infoBias.title,
+            description: infoBias.description,
+            severity: "WARNING",
+        });
+        warnings++;
+        weaknesses.push(infoBias.weakness);
+    }
+
+    // If no issues found
+    if (weaknesses.length === 0 && passed === 0) {
         details.push({
             category: "BIAS",
             status: "PASS",
             title: "No systematic bias detected",
             description:
-                "Recommendation appears balanced between product options, strategies, and risk profiles",
+                "Recommendation appears balanced with transparent reasoning, equal alternative analysis, and disclosed costs",
         });
         passed++;
     }
 
-    return { details, passed, failed, warnings, weaknesses };
+    return { details, passed, failed, warnings, weaknesses, challenges };
+}
+
+/**
+ * Check for provider conflicts
+ */
+function checkProviderConflict(
+    candidate: RecommendationCandidate
+): {
+    hasConflict: boolean;
+    severity: "LOW" | "MEDIUM" | "HIGH";
+    description: string;
+    challenge?: AdversarialChallenge;
+} {
+    // Check if recommendation mentions specific provider that might have provided evidence
+    const providerNamesPattern = /Chase|Wells Fargo|Citibank|American Express|Capital One|Ally|Marcus|Wealthfront|Vanguard|Fidelity|Schwab|TD Ameritrade|Interactive Brokers|E-Trade/i;
+    const mentionsProvider = providerNamesPattern.test(candidate.recommendedAction);
+    const hasProviderEvidence = candidate.evidence.some((e) => e.sourceTier === "TIER_2_PROVIDER");
+
+    if (mentionsProvider && hasProviderEvidence) {
+        return {
+            hasConflict: true,
+            severity: candidate.alternatives.length === 0 ? "HIGH" : "MEDIUM",
+            description:
+                "Recommends specific provider whose evidence is used as support; conflicts of interest may exist",
+            challenge: {
+                type: "PROVIDER_CONFLICT",
+                scenario: "Provider has financial incentive to be chosen",
+                impact: "HIGH",
+                likelihood: "LIKELY",
+                recommendation: "Verify with independent evidence; compare against competing providers",
+            },
+        };
+    }
+
+    return { hasConflict: false, severity: "LOW", description: "" };
+}
+
+/**
+ * Analyze product recommendation for completeness
+ */
+function analyzeProductRecommendation(
+    candidate: RecommendationCandidate
+): {
+    issues: Array<{
+        title: string;
+        description: string;
+        weakness: string;
+        severity: "LOW" | "MEDIUM" | "HIGH";
+    }>;
+} {
+    const issues: Array<{
+        title: string;
+        description: string;
+        weakness: string;
+        severity: "LOW" | "MEDIUM" | "HIGH";
+    }> = [];
+
+    const isMaterialProduct =
+        /product|account|card|fund|investment|broker|bank/i.test(candidate.recommendedAction);
+
+    if (!isMaterialProduct) {
+        return { issues };
+    }
+
+    // Check for benefit statement
+    const hasBenefit = /will|provide|offer|gives|enables|allow/i.test(candidate.recommendedAction);
+    if (!hasBenefit) {
+        issues.push({
+            title: "Missing benefit statement",
+            description: "Product recommendation lacks clear statement of benefit",
+            weakness: "Benefit of product not clearly articulated",
+            severity: "LOW",
+        });
+    }
+
+    // Check for cost disclosure
+    const hasCostMention = /fee|cost|charge|price|interest rate|annual|monthly/i.test(
+        candidate.summary + candidate.rationale
+    );
+    if (!hasCostMention) {
+        issues.push({
+            title: "Cost information missing",
+            description: "Product recommendation lacks cost or fee information",
+            weakness: "Costs not disclosed; user unable to assess value",
+            severity: "MEDIUM",
+        });
+    }
+
+    // Check for limitations
+    const hasLimitation = /but|however|limit|may not|won't|caveat|restriction/i.test(
+        candidate.summary + candidate.rationale
+    );
+    if (!hasLimitation) {
+        issues.push({
+            title: "No limitations disclosed",
+            description:
+                "Product recommendation lacks discussion of limitations or when it might not work",
+            weakness: "Limitations not disclosed",
+            severity: "MEDIUM",
+        });
+    }
+
+    // Check for reason/justification
+    const hasReason = /because|due to|since|as|based on|reason/i.test(candidate.rationale);
+    if (!hasReason && candidate.alternatives.length < 2) {
+        issues.push({
+            title: "Weak justification for preference",
+            description: "Recommendation lacks clear reason why this product over alternatives",
+            weakness: "Preference not justified",
+            severity: "MEDIUM",
+        });
+    }
+
+    return { issues };
+}
+
+/**
+ * Check if fees might bias the recommendation
+ */
+function checkFeeBias(
+    candidate: RecommendationCandidate
+): {
+    issues: Array<{
+        title: string;
+        description: string;
+        weakness: string;
+    }>;
+} {
+    const issues: Array<{
+        title: string;
+        description: string;
+        weakness: string;
+    }> = [];
+
+    // Check if high-fee product is recommended
+    const highFeeKeywords = ["high-yield", "premium", "elite", "exclusive", "rewards"];
+    const mentionsHighFee = highFeeKeywords.some((kw) =>
+        (candidate.summary + candidate.recommendedAction).toLowerCase().includes(kw)
+    );
+
+    if (mentionsHighFee) {
+        // Check if lower-cost alternatives are discussed
+        const hasLowCostAlternative = candidate.alternatives.some(
+            (a) =>
+                /low.cost|free|basic|simple|no.fee/i.test(a.description) ||
+                (a.estimatedImpact !== undefined && a.estimatedImpact > Money(0))
+        );
+
+        if (!hasLowCostAlternative) {
+            issues.push({
+                title: "High-fee product without low-cost alternative",
+                description: "Premium/reward product recommended without comparing free alternatives",
+                weakness: "Cost comparison may be biased",
+            });
+        }
+    }
+
+    // Check if fee structure is hidden
+    const hasFeeDisclosure = /fee|commission|spread|markup|premium/i.test(
+        candidate.summary + candidate.rationale
+    );
+    if (!hasFeeDisclosure && /product|invest|account|fund|card/i.test(candidate.recommendedAction)) {
+        issues.push({
+            title: "Fee structure not disclosed",
+            description: "Product recommendation lacks details about fees or costs",
+            weakness: "Fee structure opacity prevents informed comparison",
+        });
+    }
+
+    return { issues };
+}
+
+/**
+ * Detect marketing/persuasive language without evidence
+ */
+function detectMarketingLanguage(candidate: RecommendationCandidate): {
+    hasProblematicLanguage: boolean;
+    description: string;
+} {
+    const marketingPhrases = [
+        "guaranteed",
+        "best",
+        "must have",
+        "don't miss",
+        "exclusive",
+        "limited time",
+        "everyone should",
+        "top-rated",
+        "can't lose",
+        "amazing",
+        "incredible",
+        "revolutionary",
+    ];
+
+    const fullText = candidate.summary + candidate.rationale + candidate.recommendedAction;
+    const lowerText = fullText.toLowerCase();
+
+    const marketingCount = marketingPhrases.filter((phrase) => lowerText.includes(phrase)).length;
+
+    // Check if strong evidence supports the language
+    const hasStrongEvidence = candidate.evidence.filter((e) => e.confidence === "HIGH").length >= 2;
+
+    if (marketingCount > 2 && !hasStrongEvidence) {
+        return {
+            hasProblematicLanguage: true,
+            description: `Recommendation uses ${marketingCount} persuasive phrases but lacks strong supporting evidence`,
+        };
+    }
+
+    return { hasProblematicLanguage: false, description: "" };
+}
+
+/**
+ * Identify assumptions that are implicit rather than explicit
+ */
+function identifyHiddenAssumptions(candidate: RecommendationCandidate): string[] {
+    const hidden: string[] = [];
+
+    // Check if recommendation assumes future condition without stating it
+    const futureConditionKeywords = ["will", "must", "needs", "requires", "depends on"];
+    const hasUnclearedFutureRef = futureConditionKeywords.some((kw) =>
+        (candidate.summary + candidate.rationale).toLowerCase().includes(kw)
+    );
+
+    if (hasUnclearedFutureRef && candidate.assumptions.length === 0) {
+        hidden.push("Recommendation depends on future conditions");
+    }
+
+    // Check if recommendation assumes no change without documenting it
+    if (candidate.assumptions.every((a) => a.key !== "market_conditions")) {
+        hidden.push("Assumes market conditions remain stable");
+    }
+
+    if (candidate.assumptions.every((a) => a.key !== "personal_circumstances")) {
+        hidden.push("Assumes household circumstances don't change");
+    }
+
+    // Check if specific life events are assumed
+    const mentionsRetirement = /retire|retirement|age 65|65 years/i.test(
+        candidate.summary + candidate.rationale
+    );
+    if (mentionsRetirement && !candidate.assumptions.some((a) => a.key.includes("retire"))) {
+        hidden.push("Retirement timing is assumed but not explicitly stated");
+    }
+
+    return hidden;
+}
+
+/**
+ * Check if downside risks are asymmetrically presented
+ */
+function checkAsymmetricDownside(candidate: RecommendationCandidate): {
+    isAsymmetric: boolean;
+    isSevere: boolean;
+    description: string;
+} {
+    // Count positive language in summary vs risk documentation
+    const positiveWords = ["excellent", "strong", "significant", "substantial", "great"];
+    const summaryPositive = positiveWords.filter((w) =>
+        candidate.summary.toLowerCase().includes(w)
+    ).length;
+
+    // Count how thoroughly risks are documented
+    const risksWithMitigation = candidate.risks.filter((r) => r.mitigations && r.mitigations.length > 0)
+        .length;
+    const totalRisks = candidate.risks.length;
+    const riskMitigationRatio = totalRisks > 0 ? risksWithMitigation / totalRisks : 1;
+
+    // If summary is very positive but risks lack mitigation, it's asymmetric
+    if (summaryPositive > 2 && riskMitigationRatio < 0.5 && totalRisks > 0) {
+        return {
+            isAsymmetric: true,
+            isSevere: riskMitigationRatio === 0,
+            description: `Summary emphasizes benefits (${summaryPositive} positive words) but only ${(riskMitigationRatio * 100).toFixed(0)}% of risks have mitigations`,
+        };
+    }
+
+    // Check if upside is overstated compared to downside detail
+    const upsideLength = candidate.summary.length;
+    const downsideLength = candidate.risks
+        .map((r) => r.description.length)
+        .reduce((a, b) => a + b, 0);
+
+    if (downsideLength === 0 && candidate.risks.length > 0) {
+        return {
+            isAsymmetric: true,
+            isSevere: true,
+            description: "Upside emphasized but downside risks lack detail",
+        };
+    }
+
+    if (upsideLength > downsideLength * 3) {
+        return {
+            isAsymmetric: true,
+            isSevere: false,
+            description: `Upside explanation is ${(upsideLength / downsideLength).toFixed(1)}x longer than downside risk description`,
+        };
+    }
+
+    return { isAsymmetric: false, isSevere: false, description: "" };
+}
+
+/**
+ * Check if alternatives are analyzed with equal depth
+ */
+function checkAlternativeAnalysis(candidate: RecommendationCandidate): {
+    isBalanced: boolean;
+    description: string;
+} {
+    if (candidate.alternatives.length < 2) {
+        return {
+            isBalanced: false,
+            description:
+                "Cannot assess balance with fewer than 2 alternatives; limited choice presented",
+        };
+    }
+
+    // Check if preferred alternative has more detail than others
+    const preferred = candidate.alternatives.find((a) => a.isPreferred);
+    if (!preferred) {
+        return { isBalanced: false, description: "Preferred alternative not marked" };
+    }
+
+    const preferredDetailLength = (preferred.description + preferred.rationale).length;
+    const otherDetailLength = candidate.alternatives
+        .filter((a) => !a.isPreferred)
+        .map((a) => (a.description + a.rationale).length)
+        .reduce((a, b) => a + b, 0) / (candidate.alternatives.length - 1);
+
+    // If preferred is 3x more detailed, it's unbalanced
+    if (preferredDetailLength > otherDetailLength * 2.5) {
+        return {
+            isBalanced: false,
+            description: `Preferred alternative gets ${(preferredDetailLength / otherDetailLength).toFixed(1)}x more explanation than alternatives`,
+        };
+    }
+
+    // Check if alternatives are presented as strawmen
+    const strawmanKeywords = ["but only", "however", "on the other hand"];
+    const alternativeTexts = candidate.alternatives
+        .filter((a) => !a.isPreferred)
+        .map((a) => a.rationale.toLowerCase())
+        .join(" ");
+
+    const strawmanCount = strawmanKeywords.filter((kw) => alternativeTexts.includes(kw)).length;
+    if (strawmanCount >= candidate.alternatives.length - 1) {
+        return {
+            isBalanced: false,
+            description: "Non-preferred alternatives presented as weak; strawman analysis",
+        };
+    }
+
+    return { isBalanced: true, description: "" };
+}
+
+/**
+ * Check for information retrieval bias
+ * (favoring a product because info is easier to get, not because it's better)
+ */
+function checkInformationRetrievalBias(candidate: RecommendationCandidate): {
+    hasBias: boolean;
+    title: string;
+    description: string;
+    weakness: string;
+} {
+    // Check if recommendation heavily relies on provider-sourced evidence
+    const providerEvidence = candidate.evidence.filter((e) => e.sourceTier === "TIER_2_PROVIDER").length;
+    const governmentEvidence = candidate.evidence.filter((e) => e.sourceTier === "TIER_1_GOVERNMENT")
+        .length;
+
+    if (providerEvidence > governmentEvidence && candidate.evidence.length > 1) {
+        return {
+            hasBias: true,
+            title: "Information retrieval bias detected",
+            description: "Recommendation relies more on provider-supplied information than independent research",
+            weakness: "May favor easily available information over best information",
+        };
+    }
+
+    // Check if recommendation lacks independent verification
+    if (candidate.evidence.every((e) => e.sourceTier !== "TIER_1_GOVERNMENT")) {
+        return {
+            hasBias: true,
+            title: "Lack of independent verification",
+            description: "Recommendation lacks support from government or academic research",
+            weakness: "No independent verification of claims",
+        };
+    }
+
+    return { hasBias: false, title: "", description: "", weakness: "" };
 }
 
 /**

@@ -548,4 +548,6 @@ export {
     ValidationDetail,
     AdversarialChallenge,
     ValidationResult,
+    ConflictAnalysis,
+    ProductAnalysis,
 } from "./recommendation-validator";
