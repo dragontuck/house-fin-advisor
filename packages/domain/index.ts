@@ -540,3 +540,12 @@ export {
     RecommendationBuilderInput,
     generateCandidateRecommendations,
 } from "./recommendation-builder";
+// ── Slice 5: Recommendation Validation ───────────────────────────────────
+// Independently validate and challenge candidate recommendations
+export {
+    validateRecommendation,
+    ValidatorInput,
+    ValidationDetail,
+    AdversarialChallenge,
+    ValidationResult,
+} from "./recommendation-validator";
