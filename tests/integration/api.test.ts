@@ -353,7 +353,22 @@ jest.mock("../../apps/api/src/db/repositories", () => {
             }
             async findProposalById(id: string) { return null; }
             async findProposalsByHouseholdAndPeriod(householdId: string, year: number, month: number) { return []; }
+            async findProposalsByConversationId(conversationId: string) { return []; }
             async findActiveProposalsByHousehold(householdId: string) { return []; }
+        },
+
+        PgAIAuditLogRepository: class {
+            async record(entry: any) { return { id: EntityId("audit"), createdAt: new Date(), ...entry }; }
+            async findByConversationId(conversationId: string) { return []; }
+            async findByCorrelationId(correlationId: string) { return []; }
+            async getMetrics(start: Date, end: Date) {
+                return {
+                    periodStart: start, periodEnd: end, aiRequestCount: 0, toolSuccessRate: 0,
+                    toolFailureRate: 0, workflowCompletionRate: 0, llmFailureRate: 0,
+                    responseValidationFailureRate: 0, proposalApprovalRate: 0,
+                    budgetWorkflowAbandonmentRate: 0, averageResponseTimeMs: 0,
+                };
+            }
         },
 
         PgCashFlowRepository: class {

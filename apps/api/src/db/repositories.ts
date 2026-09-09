@@ -1897,3 +1897,6 @@ export {
 
 // Re-export budget approval repository
 export { PgBudgetApprovalRepository } from "./repositories/budget-approval";
+
+// Re-export AI audit log repository
+export { PgAIAuditLogRepository, createAIAuditLogRepository } from "./repositories/ai-audit-log";

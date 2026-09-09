@@ -84,7 +84,7 @@ function getFriendlyActivity(toolName: string): string {
  * Register orchestrator routes
  */
 export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext) => {
-    const { app, advisorService, conversationRepo } = context;
+    const { app, advisorService, conversationRepo, aiAuditLogRepo } = context;
 
     /**
      * POST /conversations/:conversationId/orchestrate
@@ -185,6 +185,18 @@ export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext
                 // Get orchestrator instance and process request
                 const orchestrator = getAIOrchestrator();
                 const orchestratorResponse = await orchestrator.processRequest(orchestratorRequest);
+
+                // Metadata-only audit record - never includes financial payloads (see
+                // packages/db/migrations/012_add_ai_audit_log.sql). Recorded regardless of
+                // success/failure so admins can see what the AI attempted either way.
+                try {
+                    await aiAuditLogRepo.record(orchestratorResponse.metadata.auditEntry);
+                } catch (auditError) {
+                    console.error("[AI_AUDIT_LOG_FAILED] Failed to record audit entry", {
+                        correlationId,
+                        errorMessage: auditError instanceof Error ? auditError.message : String(auditError),
+                    });
+                }
 
                 // A graceful failure (LLM unavailable, privacy rejection, stale data, etc.) still
                 // has a safe, user-facing message - store and return it rather than a 500. The

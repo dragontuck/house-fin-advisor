@@ -113,6 +113,26 @@ export class PgBudgetApprovalRepository {
     }
 
     /**
+     * Find all proposals linked to a conversation (the "what did the AI do" audit trail).
+     */
+    async findProposalsByConversationId(conversationId: EntityId): Promise<BudgetProposal[]> {
+        const result = await query(
+            `SELECT id, household_id, conversation_id, period_year, period_month,
+                    financial_snapshot_id, snapshot_version, status,
+                    proposed_changes, approved_changes,
+                    validation_status, validation_notes,
+                    title, description,
+                    created_by, created_at, updated_at
+             FROM budget_proposals
+             WHERE conversation_id = $1
+             ORDER BY created_at ASC`,
+            [conversationId]
+        );
+
+        return result.rows.map((row) => this.mapProposalRow(row));
+    }
+
+    /**
      * Find active (not yet rejected/persisted) proposals for a household.
      */
     async findActiveProposalsByHousehold(householdId: EntityId): Promise<BudgetProposal[]> {

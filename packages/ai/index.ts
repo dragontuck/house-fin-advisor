@@ -115,6 +115,11 @@ export {
 } from "./conversation-continuity";
 
 export {
+    buildAuditLogEntry,
+    type BuildAuditLogEntryInput,
+} from "./audit-log";
+
+export {
     AdvisorFailureCategory,
     buildAdvisorFailure,
     classifyLLMError,

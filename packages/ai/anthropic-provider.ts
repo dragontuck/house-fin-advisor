@@ -17,6 +17,7 @@ import {
     LLMRequest,
     LLMResponse,
     LLMTelemetryHandler,
+    LLMToolCall,
 } from "./llm-provider";
 
 /**
@@ -162,19 +163,29 @@ export class AnthropicProvider extends BaseProvider {
             throw new Error(`Anthropic API error: ${JSON.stringify(errorData)}`);
         }
 
-        const data = await response.json();
+        // response.json() types as unknown under stricter @types/node fetch typings.
+        interface AnthropicTextBlock { type: "text"; text: string }
+        interface AnthropicToolUseBlock { type: "tool_use"; name: string; input: Record<string, unknown> }
+        type AnthropicContentBlock = AnthropicTextBlock | AnthropicToolUseBlock | { type: string };
+
+        const data = (await response.json()) as {
+            content: AnthropicContentBlock[];
+            usage: { input_tokens: number; output_tokens: number };
+            stop_reason?: string;
+        };
 
         // Parse Anthropic response format
         let content = "";
-        const toolCalls = [];
+        const toolCalls: LLMToolCall[] = [];
 
         for (const block of data.content) {
             if (block.type === "text") {
-                content += block.text;
+                content += (block as AnthropicTextBlock).text;
             } else if (block.type === "tool_use") {
+                const toolUseBlock = block as AnthropicToolUseBlock;
                 toolCalls.push({
-                    name: block.name,
-                    arguments: block.input,
+                    name: toolUseBlock.name,
+                    arguments: toolUseBlock.input,
                 });
             }
         }

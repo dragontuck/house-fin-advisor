@@ -20,7 +20,7 @@
  * - Observable: every step is logged
  */
 
-import { EntityId, AdvisorWorkflow, WorkflowState } from "@house-fin/contracts";
+import { EntityId, AdvisorWorkflow, WorkflowState, AIAuditLogEntry } from "@house-fin/contracts";
 import { AIToolPlanner, PlannedToolCall, ToolExecutionPlan } from "./ai-tool-planner";
 import { AIToolExecutor, ToolExecutionContext, ToolExecutionResult } from "./ai-tool-executor";
 import { LLMProvider, LLMRequest, LLMResponse, LLMProviderError } from "./llm-provider";
@@ -44,6 +44,7 @@ import {
     extractPaymentMethod,
     STALE_FINANCIAL_DATA_EXPLANATION,
 } from "./conversation-continuity";
+import { buildAuditLogEntry } from "./audit-log";
 
 /**
  * Request to process by orchestrator
@@ -111,6 +112,8 @@ export interface OrchestratorResponse {
             referencedSubject?: string;
             staleDataDetected?: boolean;
         };
+        /** Metadata-only audit record for this request - never contains financial payloads. */
+        auditEntry: AIAuditLogEntry;
     };
 }
 
@@ -130,6 +133,7 @@ export class AIOrchestrator {
      */
     async processRequest(request: OrchestratorRequest): Promise<OrchestratorResponse> {
         const startTime = Date.now();
+        let plan: ToolExecutionPlan | undefined;
 
         try {
             // Step 0: Resolve pronoun/elliptical follow-ups ("it", "what about $6,000 instead")
@@ -141,7 +145,7 @@ export class AIOrchestrator {
             );
 
             // Step 1: Plan which tools to execute
-            const plan = this.toolPlanner.planToolExecution(request.workflowType);
+            plan = this.toolPlanner.planToolExecution(request.workflowType);
 
             // Step 2: Prepare execution context
             const executionContext: ToolExecutionContext = {
@@ -171,7 +175,7 @@ export class AIOrchestrator {
             const preflightFailure =
                 classifyCriticalToolFailure(plan.tools, toolResults) ?? classifyStaleSnapshot(toolResults);
             if (preflightFailure) {
-                return this.buildFailureResponse(request, toolResults, preflightFailure, startTime);
+                return this.buildFailureResponse(request, plan, toolResults, preflightFailure, startTime);
             }
 
             // Step 5: Extract results for LLM
@@ -192,7 +196,7 @@ export class AIOrchestrator {
                 );
             } catch {
                 // Never surface which privacy rule matched - only that the data can't be sent.
-                return this.buildFailureResponse(request, toolResults, classifyPrivacyError(), startTime);
+                return this.buildFailureResponse(request, plan, toolResults, classifyPrivacyError(), startTime);
             }
 
             // Step 8: Call LLM with sanitized context
@@ -205,12 +209,13 @@ export class AIOrchestrator {
                     request.correlationId
                 );
             } catch (error) {
-                return this.buildFailureResponse(request, toolResults, classifyLLMError(error), startTime);
+                return this.buildFailureResponse(request, plan, toolResults, classifyLLMError(error), startTime);
             }
 
             if (!llmResponse.content || llmResponse.content.trim().length === 0) {
                 return this.buildFailureResponse(
                     request,
+                    plan,
                     toolResults,
                     buildAdvisorFailure(AdvisorFailureCategory.LLM_MALFORMED_RESPONSE),
                     startTime
@@ -239,6 +244,8 @@ export class AIOrchestrator {
                 : validated.content;
 
             // Step 10: Build final orchestrator response
+            const llmProviderInfo = this.getLLMProviderInfo();
+            const totalDurationMs = Date.now() - startTime;
             return {
                 correlationId: request.correlationId,
                 assistantMessage,
@@ -247,7 +254,7 @@ export class AIOrchestrator {
                 metadata: {
                     workflowType: request.workflowType,
                     toolsExecuted: toolResults.filter(r => r.success).length,
-                    totalDurationMs: Date.now() - startTime,
+                    totalDurationMs,
                     continuity: {
                         isFollowUp: continuity.isFollowUp,
                         isTopicSwitch: continuity.isTopicSwitch,
@@ -262,6 +269,15 @@ export class AIOrchestrator {
                         : undefined,
                     groundingPassed: validated.groundingPassed,
                     groundingViolations: validated.violations.map(v => v.type),
+                    auditEntry: buildAuditLogEntry({
+                        request,
+                        plan,
+                        toolResults,
+                        success: true,
+                        totalDurationMs,
+                        llmProvider: llmProviderInfo,
+                        groundingPassed: validated.groundingPassed,
+                    }),
                 },
             };
         } catch (error) {
@@ -272,18 +288,35 @@ export class AIOrchestrator {
 
             console.error("[ADVISOR_UNEXPECTED_FAILURE]", { correlationId: request.correlationId, errorMessage });
 
+            const fallbackPlan: ToolExecutionPlan = plan ?? {
+                workflowType: request.workflowType,
+                tools: [],
+                description: "",
+                estimatedQueries: 0,
+            };
+            const totalDurationMs = Date.now() - startTime;
+            const toolResults = this.toolExecutor.getExecutionHistory();
             return {
                 correlationId: request.correlationId,
                 assistantMessage: failure.userMessage,
-                toolResults: this.toolExecutor.getExecutionHistory(),
+                toolResults,
                 success: false,
                 error: errorMessage,
                 metadata: {
                     workflowType: request.workflowType,
                     toolsExecuted: 0,
-                    totalDurationMs: Date.now() - startTime,
+                    totalDurationMs,
                     failureCategory: failure.category,
                     retryable: failure.retryable,
+                    auditEntry: buildAuditLogEntry({
+                        request,
+                        plan: fallbackPlan,
+                        toolResults,
+                        success: false,
+                        totalDurationMs,
+                        llmProvider: this.getLLMProviderInfo(),
+                        failureCategory: failure.category,
+                    }),
                 },
             };
         }
@@ -295,6 +328,7 @@ export class AIOrchestrator {
      */
     private buildFailureResponse(
         request: OrchestratorRequest,
+        plan: ToolExecutionPlan,
         toolResults: ToolExecutionResult[],
         failure: AdvisorFailure,
         startTime: number
@@ -304,6 +338,7 @@ export class AIOrchestrator {
             category: failure.category,
         });
 
+        const totalDurationMs = Date.now() - startTime;
         return {
             correlationId: request.correlationId,
             assistantMessage: failure.userMessage,
@@ -313,11 +348,32 @@ export class AIOrchestrator {
             metadata: {
                 workflowType: request.workflowType,
                 toolsExecuted: toolResults.filter((r) => r.success).length,
-                totalDurationMs: Date.now() - startTime,
+                totalDurationMs,
                 failureCategory: failure.category,
                 retryable: failure.retryable,
+                auditEntry: buildAuditLogEntry({
+                    request,
+                    plan,
+                    toolResults,
+                    success: false,
+                    totalDurationMs,
+                    llmProvider: this.getLLMProviderInfo(),
+                    failureCategory: failure.category,
+                }),
             },
         };
+    }
+
+    /** Provider/model metadata for the audit log - never affects control flow. */
+    private getLLMProviderInfo(): { name: string; model?: string } {
+        try {
+            const name = this.llmProvider.getName();
+            const config = this.llmProvider.getConfig() as Record<string, unknown>;
+            const model = typeof config.model === "string" ? config.model : undefined;
+            return { name, model };
+        } catch {
+            return { name: "unknown" };
+        }
     }
 
     /**

@@ -1,0 +1,10 @@
+{
+    "name": "@house-fin/security",
+    "version": "0.1.0",
+    "description": "Privacy gateway and data classification for AI advisor requests",
+    "main": "index.ts",
+    "types": "index.ts",
+    "dependencies": {
+        "@house-fin/contracts": "^0.1.0"
+    }
+}

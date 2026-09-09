@@ -94,6 +94,7 @@ import {
     PgAdvisorMessageRepository,
     PgWorkflowStateRepository,
     PgToolExecutionRepository,
+    PgAIAuditLogRepository,
 } from "./db/repositories";
 import { householdContextMiddleware, verifyHouseholdContext } from "./middleware/household-context";
 import { uploadRateLimiter } from "./middleware/rate-limit";
@@ -104,6 +105,7 @@ import { registerBudgetApprovalRoutes } from "./routes/budget-approval";
 import { registerAdvisorConversationRoutes } from "./routes/advisor-conversations";
 import { registerOrchestratorRoutes } from "./routes/ai-orchestrator";
 import { registerToolExecutionRoutes } from "./routes/tool-execution";
+import { registerAIAuditRoutes } from "./routes/ai-audit";
 
 /**
  * Error with context
@@ -191,6 +193,7 @@ export function createServer(): Express {
     const messageRepo = new PgAdvisorMessageRepository();
     const workflowRepo = new PgWorkflowStateRepository();
     const toolExecutionRepo = new PgToolExecutionRepository();
+    const aiAuditLogRepo = new PgAIAuditLogRepository();
 
     const budgetRepo = new PgBudgetRepository();
     const budgetService = createBudgetService();
@@ -2745,6 +2748,7 @@ export function createServer(): Express {
         messageRepo,
         workflowRepo,
         toolExecutionRepo,
+        aiAuditLogRepo,
         storageAdapter,
     };
 
@@ -2752,6 +2756,7 @@ export function createServer(): Express {
     registerAdvisorConversationRoutes(approvalRouteContext);
     registerOrchestratorRoutes(approvalRouteContext);
     registerToolExecutionRoutes(approvalRouteContext);
+    registerAIAuditRoutes(approvalRouteContext);
 
     /**
      * 404 handler

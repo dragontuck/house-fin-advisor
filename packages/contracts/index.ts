@@ -1906,3 +1906,6 @@ export interface ApproveWorkflowResponse {
 
 // ── AI Tool Contracts ──────────────────────────────────────────────────────────
 export * from "./ai-tools";
+
+// ── AI Audit Log Contracts ─────────────────────────────────────────────────────
+export * from "./ai-audit";
