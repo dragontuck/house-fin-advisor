@@ -551,3 +551,11 @@ export {
     ConflictAnalysis,
     ProductAnalysis,
 } from "./recommendation-validator";
+
+// ── Slice 5: Recommendation Selection ───────────────────────────────────
+// Select final recommendation from validated candidates using deterministic rules
+export {
+    selectFinalRecommendation,
+    ValidatedCandidate,
+    FinalRecommendation,
+} from "./recommendation-selector";
