@@ -35,14 +35,14 @@ import { RecommendationCandidate } from "./recommendation-builder";
  */
 export interface ValidationDetail {
     category:
-        | "MATH"
-        | "POLICY"
-        | "EVIDENCE"
-        | "ASSUMPTIONS"
-        | "ALTERNATIVES"
-        | "DOWNSIDE"
-        | "BIAS"
-        | "FRESHNESS";
+    | "MATH"
+    | "POLICY"
+    | "EVIDENCE"
+    | "ASSUMPTIONS"
+    | "ALTERNATIVES"
+    | "DOWNSIDE"
+    | "BIAS"
+    | "FRESHNESS";
     status: "PASS" | "WARN" | "FAIL";
     title: string;
     description: string;
@@ -55,19 +55,19 @@ export interface ValidationDetail {
  */
 export interface AdversarialChallenge {
     type:
-        | "ASSUMPTION"
-        | "DATA_FRESHNESS"
-        | "INCOME_CHANGE"
-        | "EXPENSE_CHANGE"
-        | "INTEREST_RATE"
-        | "TAX_CONSEQUENCE"
-        | "GOAL_DEADLINE"
-        | "EMERGENCY"
-        | "BENEFIT_OVERSTATEMENT"
-        | "MISSING_DEBT"
-        | "OUTDATED_TERMS"
-        | "HIDDEN_COST"
-        | "TIMING_RISK";
+    | "ASSUMPTION"
+    | "DATA_FRESHNESS"
+    | "INCOME_CHANGE"
+    | "EXPENSE_CHANGE"
+    | "INTEREST_RATE"
+    | "TAX_CONSEQUENCE"
+    | "GOAL_DEADLINE"
+    | "EMERGENCY"
+    | "BENEFIT_OVERSTATEMENT"
+    | "MISSING_DEBT"
+    | "OUTDATED_TERMS"
+    | "HIDDEN_COST"
+    | "TIMING_RISK";
     scenario: string; // Plausible scenario
     impact: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"; // How bad if it happens?
     likelihood: "UNLIKELY" | "POSSIBLE" | "LIKELY" | "PROBABLE";

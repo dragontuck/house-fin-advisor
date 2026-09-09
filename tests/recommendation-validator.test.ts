@@ -665,7 +665,7 @@ describe("Recommendation Validator", () => {
             if (result.failedChecks > 0) {
                 console.log("Failed checks:", result.details.filter((d) => d.status === "FAIL"));
             }
-            
+
             expect(result.failedChecks).toBe(0);
             // Should be PASS or PASS_WITH_WARNINGS - no critical failures
             expect(["PASS", "PASS_WITH_WARNINGS"]).toContain(result.status);
