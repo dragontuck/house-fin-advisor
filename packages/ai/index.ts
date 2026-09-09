@@ -99,6 +99,22 @@ export {
 } from "./response-grounding";
 
 export {
+    resolveConversationalReference,
+    findLastScenarioReference,
+    detectStaleFinancialConflict,
+    extractNumericFacts,
+    extractScenarioSubject,
+    containsPronounReference,
+    extractDollarAmountCents,
+    extractPaymentMethod,
+    STALE_FINANCIAL_DATA_EXPLANATION,
+    type ConversationTurn,
+    type ScenarioReference,
+    type ContinuityResolution,
+    type StaleDataCheck,
+} from "./conversation-continuity";
+
+export {
     AdvisorFailureCategory,
     buildAdvisorFailure,
     classifyLLMError,

@@ -110,5 +110,8 @@ Every ingestion parser requires fixtures.
 
 Every AI tool requires contract tests.
 
+## Documents
+place working and output documents into the folder .\docs
+
 ## Agents
 - Minimize token usage and the number of rework

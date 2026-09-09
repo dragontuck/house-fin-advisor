@@ -35,6 +35,15 @@ import {
     classifyCriticalToolFailure,
     classifyStaleSnapshot,
 } from "./graceful-failure";
+import {
+    ConversationTurn,
+    resolveConversationalReference,
+    detectStaleFinancialConflict,
+    extractNumericFacts,
+    extractDollarAmountCents,
+    extractPaymentMethod,
+    STALE_FINANCIAL_DATA_EXPLANATION,
+} from "./conversation-continuity";
 
 /**
  * Request to process by orchestrator
@@ -58,6 +67,10 @@ export interface OrchestratorRequest {
     messageId?: EntityId;
     /** Financial context (already gathered by caller) */
     financialContext?: Record<string, unknown>;
+    /** Prior conversation turns, oldest first, excluding the current message. Contextual only — never authoritative. */
+    conversationHistory?: ConversationTurn[];
+    /** Numeric financial facts ("*Cents" fields) from prior tool executions in this conversation. Contextual only — current data always wins. */
+    priorScenarioFacts?: Record<string, number>;
 }
 
 /**
@@ -91,6 +104,13 @@ export interface OrchestratorResponse {
         failureCategory?: AdvisorFailureCategory;
         /** Whether the frontend should offer a [Try Again] action for this failure */
         retryable?: boolean;
+        /** Conversational continuity classification for this turn */
+        continuity?: {
+            isFollowUp: boolean;
+            isTopicSwitch: boolean;
+            referencedSubject?: string;
+            staleDataDetected?: boolean;
+        };
     };
 }
 
@@ -112,6 +132,14 @@ export class AIOrchestrator {
         const startTime = Date.now();
 
         try {
+            // Step 0: Resolve pronoun/elliptical follow-ups ("it", "what about $6,000 instead")
+            // against prior turns. History only fills in a missing *subject* - it is never
+            // authoritative, and every dollar figure still comes from this message / live data.
+            const continuity = resolveConversationalReference(
+                request.userMessage,
+                request.conversationHistory ?? []
+            );
+
             // Step 1: Plan which tools to execute
             const plan = this.toolPlanner.planToolExecution(request.workflowType);
 
@@ -125,8 +153,11 @@ export class AIOrchestrator {
                 messageId: request.messageId,
             };
 
-            // Step 3: Prepare tool parameters
-            const toolParams = this.prepareToolParameters(request, plan);
+            // Step 3: Prepare tool parameters, using the resolved (subject-filled-in) message
+            const toolParams = this.prepareToolParameters(
+                { ...request, userMessage: continuity.resolvedMessage },
+                plan
+            );
 
             // Step 4: Execute tools (with authorization checks inside executor)
             const toolResults = await this.toolExecutor.executeToolPlan(
@@ -190,16 +221,39 @@ export class AIOrchestrator {
             // deterministic fallback if the LLM said anything unsupported.
             const validated = this.validateResponse(llmResponse, toolResults);
 
+            // Step 9.5: If we reused a prior scenario, check whether the figures it relied on
+            // have since changed. Current data always wins - disclose it rather than silently
+            // giving a different-sounding answer.
+            let staleCheck: { hasConflict: boolean; explanation?: string } = { hasConflict: false };
+            if (continuity.isFollowUp && request.priorScenarioFacts) {
+                const currentFacts: Record<string, number> = {};
+                for (const result of toolResults) {
+                    if (result.success) {
+                        Object.assign(currentFacts, extractNumericFacts(result.data as Record<string, unknown>));
+                    }
+                }
+                staleCheck = detectStaleFinancialConflict(request.priorScenarioFacts, currentFacts);
+            }
+            const assistantMessage = staleCheck.hasConflict
+                ? `${STALE_FINANCIAL_DATA_EXPLANATION} ${validated.content}`
+                : validated.content;
+
             // Step 10: Build final orchestrator response
             return {
                 correlationId: request.correlationId,
-                assistantMessage: validated.content,
+                assistantMessage,
                 toolResults,
                 success: true,
                 metadata: {
                     workflowType: request.workflowType,
                     toolsExecuted: toolResults.filter(r => r.success).length,
                     totalDurationMs: Date.now() - startTime,
+                    continuity: {
+                        isFollowUp: continuity.isFollowUp,
+                        isTopicSwitch: continuity.isTopicSwitch,
+                        referencedSubject: continuity.referencedScenario?.subject,
+                        staleDataDetected: staleCheck.hasConflict,
+                    },
                     llmTokensUsed: llmResponse.usage
                         ? {
                             input: llmResponse.usage.inputTokens,
@@ -467,27 +521,4 @@ export function getAIOrchestrator(): AIOrchestrator {
 
 export function initializeAIOrchestrator(orchestrator: AIOrchestrator): void {
     orchestratorInstance = orchestrator;
-}
-
-/**
- * Extracts a dollar amount (e.g. "$4,000" or "4000 dollars") from free text and
- * converts it to cents. Returns 0 if no amount is found - the tool must never guess.
- */
-function extractDollarAmountCents(text: string): number {
-    const match = text.match(/\$\s?([\d,]+(?:\.\d{1,2})?)|([\d,]+(?:\.\d{1,2})?)\s?(?:dollars|usd)/i);
-    const raw = match?.[1] ?? match?.[2];
-    if (!raw) return 0;
-    const dollars = parseFloat(raw.replace(/,/g, ""));
-    return Number.isFinite(dollars) ? Math.round(dollars * 100) : 0;
-}
-
-/**
- * Infers the intended payment method from free text. Defaults to CASH when unspecified.
- */
-function extractPaymentMethod(text: string): "CASH" | "CREDIT_CARD" | "LOAN" | "SAVINGS" {
-    const lower = text.toLowerCase();
-    if (/credit card|credit\b/.test(lower)) return "CREDIT_CARD";
-    if (/loan|finance(d)?|financing/.test(lower)) return "LOAN";
-    if (/savings/.test(lower)) return "SAVINGS";
-    return "CASH";
 }

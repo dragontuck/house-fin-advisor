@@ -14,6 +14,8 @@ import {
     getAIOrchestrator,
     OrchestratorRequest,
     OrchestratorResponse,
+    ConversationTurn,
+    extractNumericFacts,
 } from "@house-fin/ai";
 
 class OrchestratorError extends Error {
@@ -129,7 +131,7 @@ export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext
                 const messages = await advisorService.getConversationHistory(
                     conversationId as EntityId
                 );
-                const lastUserMessage = messages
+                const lastUserMessage = [...messages]
                     .reverse()
                     .find(m => m.role === AdvisorMessageRole.USER);
 
@@ -139,6 +141,31 @@ export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext
                         "No user message found in conversation",
                         "NO_USER_MESSAGE"
                     );
+                }
+
+                // Prior turns only (excluding the message being processed) - used only to resolve
+                // pronoun/elliptical follow-ups ("it", "what about $6,000 instead"). Contextual only,
+                // never authoritative - every dollar figure still comes from live tool execution.
+                const conversationHistory: ConversationTurn[] = messages
+                    .filter(m => m.id !== lastUserMessage.id)
+                    .map(m => ({
+                        role: m.role.toLowerCase() as ConversationTurn["role"],
+                        content: m.content,
+                    }));
+
+                // Merge numeric facts from every prior tool execution in this conversation, most
+                // recent wins - used only to detect when a reused scenario's figures have gone stale.
+                const priorToolExecutions = await advisorService.getToolExecutionHistory(
+                    conversationId as EntityId
+                );
+                let priorScenarioFacts: Record<string, number> | undefined;
+                for (const execution of priorToolExecutions) {
+                    if (execution.result) {
+                        priorScenarioFacts = {
+                            ...priorScenarioFacts,
+                            ...extractNumericFacts(execution.result),
+                        };
+                    }
                 }
 
                 // Prepare orchestrator request
@@ -151,6 +178,8 @@ export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext
                     isHouseholdOwner,
                     conversationId: conversationId as EntityId,
                     financialContext: financialContext || {},
+                    conversationHistory,
+                    priorScenarioFacts,
                 };
 
                 // Get orchestrator instance and process request
@@ -203,6 +232,7 @@ export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext
                         toolsExecuted: orchestratorResponse.metadata.toolsExecuted,
                         totalDurationMs: orchestratorResponse.metadata.totalDurationMs,
                         llmTokensUsed: orchestratorResponse.metadata.llmTokensUsed,
+                        continuity: orchestratorResponse.metadata.continuity,
                     },
                     toolResults: orchestratorResponse.toolResults.map(r => ({
                         friendlyActivity: getFriendlyActivity(r.toolName),

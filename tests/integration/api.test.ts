@@ -347,6 +347,15 @@ jest.mock("../../apps/api/src/db/repositories", () => {
             async categorizeTransaction(transactionId: string, householdId: string, category: string) { }
         },
 
+        PgBudgetApprovalRepository: class {
+            async createProposal(householdId: string, year: number, month: number, changes: any[], createdBy: string) {
+                return { id: EntityId("proposal"), householdId, periodYear: year, periodMonth: month, proposedChanges: changes, createdBy };
+            }
+            async findProposalById(id: string) { return null; }
+            async findProposalsByHouseholdAndPeriod(householdId: string, year: number, month: number) { return []; }
+            async findActiveProposalsByHousehold(householdId: string) { return []; }
+        },
+
         PgCashFlowRepository: class {
             async getTransactionsForRange(householdId: string, fromDate: Date, toDate: Date) { return []; }
             async getLiquidCashCents(householdId: string) { return 0; }

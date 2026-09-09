@@ -19,7 +19,7 @@ import {
     analyzeBudgetVariance,
     planNextMonthBudget,
     simulateBudgetChange,
-    createToolDependencies,
+    type ToolDependencies,
 } from "@house-fin/ai";
 import { createBudgetService, createCashFlowService } from "@house-fin/domain";
 
@@ -51,49 +51,59 @@ export const registerToolExecutionRoutes: RouteRegistrar = (context: RouteContex
     const budgetService = createBudgetService();
     const cashFlowService = createCashFlowService();
 
-    // Create repository adapter for tools - delegates to actual repositories
-    const toolRepos = {
-        findByPeriod: async (householdId: EntityId, year: number, month: number) => {
-            return await budgetRepo.findByHouseholdAndPeriod(householdId, year, month);
-        },
-        findByHouseholdIdRange: async (
-            householdId: EntityId,
-            startYear: number,
-            startMonth: number,
-            endYear: number,
-            endMonth: number
-        ) => {
-            // Collect budgets across multiple months by calling period method multiple times
-            const budgets = [];
-            let year = startYear;
-            let month = startMonth;
-            while (year < endYear || (year === endYear && month <= endMonth)) {
-                const periodBudgets = await budgetRepo.findByHouseholdAndPeriod(householdId, year, month);
-                budgets.push(...periodBudgets);
-                month++;
-                if (month > 12) {
-                    month = 1;
-                    year++;
-                }
-            }
-            return budgets;
-        },
-        findByHouseholdAndPeriod: async (householdId: EntityId, year: number, month: number) => {
-            return await budgetRepo.getTransactionsForPeriod(householdId, year, month);
-        },
-        findByHouseholdDateRange: async (householdId: EntityId, startDate: Date, endDate: Date) => {
-            return await cashFlowRepo.getTransactionsForRange(householdId, startDate, endDate);
-        },
-        findByHouseholdId: async (householdId: EntityId) => {
-            return await settingsRepo.findByHouseholdId(householdId);
-        },
-    };
-
-    const toolDeps = createToolDependencies(
+    // Adapts existing repositories to the shape the deterministic AI tools expect. Built directly
+    // (not via createToolDependencies()) because settingsRepo and recurringPatternsRepo both need
+    // their own distinct findByHouseholdId - merging them into one object silently breaks either
+    // one, since they return different shapes for the same method name.
+    const toolDeps: ToolDependencies = {
         budgetService,
         cashFlowService,
-        toolRepos as any
-    );
+        budgetRepo: {
+            findByPeriod: async (householdId: EntityId, year: number, month: number) => {
+                return await budgetRepo.findByHouseholdAndPeriod(householdId, year, month);
+            },
+            findByHouseholdIdRange: async (
+                householdId: EntityId,
+                startYear: number,
+                startMonth: number,
+                endYear: number,
+                endMonth: number
+            ) => {
+                // Collect budgets across multiple months by calling period method multiple times
+                const budgets = [];
+                let year = startYear;
+                let month = startMonth;
+                while (year < endYear || (year === endYear && month <= endMonth)) {
+                    const periodBudgets = await budgetRepo.findByHouseholdAndPeriod(householdId, year, month);
+                    budgets.push(...periodBudgets);
+                    month++;
+                    if (month > 12) {
+                        month = 1;
+                        year++;
+                    }
+                }
+                return budgets;
+            },
+        },
+        transactionRepo: {
+            findByHouseholdAndPeriod: async (householdId: EntityId, year: number, month: number) => {
+                return await budgetRepo.getTransactionsForPeriod(householdId, year, month);
+            },
+            findByHouseholdDateRange: async (householdId: EntityId, startDate: Date, endDate: Date) => {
+                return await cashFlowRepo.getTransactionsForRange(householdId, startDate, endDate);
+            },
+        },
+        settingsRepo: {
+            findByHouseholdId: async (householdId: EntityId) => {
+                return await settingsRepo.findByHouseholdId(householdId);
+            },
+        },
+        recurringPatternsRepo: {
+            // Recurring pattern detection is not yet persisted; treated as empty until implemented
+            // (matches the same placeholder used by the orchestrator's toolDeps in server.ts).
+            findByHouseholdId: async () => [],
+        },
+    };
 
     /**
      * POST /tools/create_initial_budget

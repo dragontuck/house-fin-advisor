@@ -21,35 +21,40 @@ import {
 describe("Financial Context Builder Integration Tests", () => {
     let builder: FinancialContextBuilder;
     const householdId = EntityId("test-household-1");
+    // FinancialContextBuilder always queries the *current* month/year (via `new Date()`),
+    // so fixtures must track wall-clock time rather than a hardcoded past month.
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
 
     beforeEach(() => {
         // Create mock repositories
         const repos = {
             budgetRepo: {
                 findByHouseholdAndPeriod: async (hid: EntityId, year: number, month: number) => {
-                    if (month === 8 && year === 2026) {
+                    if (month === currentMonth && year === currentYear) {
                         return [
                             {
                                 id: EntityId("budget-1"),
                                 householdId: hid,
                                 category: "Groceries",
                                 amountCents: MoneyFromDollars(400),
-                                periodYear: 2026,
-                                periodMonth: 8,
+                                periodYear: currentYear,
+                                periodMonth: currentMonth,
                                 version: 1,
-                                createdAt: new Date("2026-08-01"),
-                                updatedAt: new Date("2026-08-01"),
+                                createdAt: new Date(currentYear, currentMonth - 1, 1),
+                                updatedAt: new Date(currentYear, currentMonth - 1, 1),
                             },
                             {
                                 id: EntityId("budget-2"),
                                 householdId: hid,
                                 category: "Utilities",
                                 amountCents: MoneyFromDollars(150),
-                                periodYear: 2026,
-                                periodMonth: 8,
+                                periodYear: currentYear,
+                                periodMonth: currentMonth,
                                 version: 1,
-                                createdAt: new Date("2026-08-01"),
-                                updatedAt: new Date("2026-08-01"),
+                                createdAt: new Date(currentYear, currentMonth - 1, 1),
+                                updatedAt: new Date(currentYear, currentMonth - 1, 1),
                             },
                         ];
                     }
@@ -59,14 +64,14 @@ describe("Financial Context Builder Integration Tests", () => {
             },
             transactionRepo: {
                 findByHouseholdAndPeriod: async (hid: EntityId, year: number, month: number) => {
-                    if (month === 8 && year === 2026) {
+                    if (month === currentMonth && year === currentYear) {
                         return [
                             {
                                 id: EntityId("txn-1"),
                                 householdId: hid,
                                 accountId: EntityId("account-1"),
-                                postedDate: new Date("2026-08-05"),
-                                transactionDate: new Date("2026-08-05"),
+                                postedDate: new Date(currentYear, currentMonth - 1, 5),
+                                transactionDate: new Date(currentYear, currentMonth - 1, 5),
                                 amountCents: 12000,
                                 direction: "DEBIT",
                                 merchant: "Whole Foods",

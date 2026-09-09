@@ -6,8 +6,8 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from "@jest/globals";
 import request from "supertest";
 import { v4 as uuidv4 } from "uuid";
-import { createServer } from "../../src/server";
-import { query } from "../../src/db/connection";
+import { createServer } from "../../apps/api/src/server";
+import { query } from "../../apps/api/src/db/connection";
 import { EntityId, DocumentProcessingStatus } from "@house-fin/contracts";
 import { calculateFileChecksum } from "@house-fin/domain";
 
@@ -22,21 +22,28 @@ interface TestContext {
 }
 
 let testContext: TestContext;
+const createdHouseholdIds = new Set<EntityId>();
 
-beforeAll(() => {
+/** Uploads now enforce a real FK to households(id) - insert a matching row first. */
+async function createTestHousehold(id: EntityId): Promise<void> {
+    await query("INSERT INTO finhouse.households (id, name) VALUES ($1, $2)", [id, `Test Household ${id}`]);
+    createdHouseholdIds.add(id);
+}
+
+beforeAll(async () => {
     testContext = {
         app: createServer(),
         householdId: EntityId(uuidv4()),
         correlationId: uuidv4(),
     };
+    await createTestHousehold(testContext.householdId);
 });
 
 afterAll(async () => {
-    // Clean up test data
-    await query(
-        "DELETE FROM finhouse.financial_documents WHERE household_id = $1",
-        [testContext.householdId]
-    );
+    // Clean up test data (households(id) cascades to financial_documents on delete)
+    for (const id of createdHouseholdIds) {
+        await query("DELETE FROM finhouse.households WHERE id = $1", [id]);
+    }
 });
 
 describe("Document Upload E2E", () => {
@@ -139,6 +146,8 @@ describe("Document Upload E2E", () => {
      * Error case: Invalid file type
      */
     test("should reject unsupported file type", async () => {
+        // Note: "application/octet-stream" is intentionally allowed as a generic statement
+        // fallback (see validateDocumentUpload) - use a genuinely unsupported MIME type here.
         const exeContent = Buffer.from("MZ\\x90\\x00", "utf8"); // PE executable header
 
         const response = await request(testContext.app)
@@ -147,7 +156,7 @@ describe("Document Upload E2E", () => {
             .set("X-Correlation-Id", testContext.correlationId)
             .send({
                 fileName: "malware.exe",
-                mimeType: "application/octet-stream",
+                mimeType: "application/x-msdownload",
                 fileSize: exeContent.length,
                 sourceType: "CSV",
                 fileContent: exeContent.toString("base64"),
@@ -207,6 +216,11 @@ describe("Document Upload E2E", () => {
      * Rate limiting: Too many uploads per minute
      */
     test("should rate limit excessive uploads", async () => {
+        // Isolated household so this test's quota-exhausting uploads don't affect other tests
+        // that share testContext.householdId within the same rate-limit window.
+        const rateLimitHouseholdId = EntityId(uuidv4());
+        await createTestHousehold(rateLimitHouseholdId);
+
         const csvContent = Buffer.from("Date,Amount\\n2024-01-01,100");
         const payload = {
             fileName: "test.csv",
@@ -223,7 +237,7 @@ describe("Document Upload E2E", () => {
                 .map(() =>
                     request(testContext.app)
                         .post("/documents/upload")
-                        .set("X-Household-Id", testContext.householdId)
+                        .set("X-Household-Id", rateLimitHouseholdId)
                         .set("X-Correlation-Id", uuidv4())
                         .send(payload)
                 )
@@ -268,10 +282,10 @@ describe("Document Upload E2E", () => {
             .set("X-Correlation-Id", testContext.correlationId);
 
         expect(listResponse.status).toBe(200);
-        expect(listResponse.body.documents.length).toBeGreaterThanOrEqual(uploadIds.length);
+        expect(listResponse.body.length).toBeGreaterThanOrEqual(uploadIds.length);
 
         // Verify all uploaded documents are in list
-        const listedIds = listResponse.body.documents.map((doc: any) => doc.id);
+        const listedIds = listResponse.body.map((doc: any) => doc.id);
         for (const uploadId of uploadIds) {
             expect(listedIds).toContain(uploadId);
         }
@@ -281,7 +295,9 @@ describe("Document Upload E2E", () => {
      * Document summary: Verify detailed metadata is returned
      */
     test("should return document summary with processing details", async () => {
-        const csvContent = Buffer.from("Date,Amount\\n2024-01-01,100");
+        // Unique content so its checksum doesn't collide with other tests sharing this household
+        // (identical content would hit the idempotent-duplicate path and return 200, not 202).
+        const csvContent = Buffer.from("Date,Amount\\n2024-01-01,summary-test-unique-100");
 
         const uploadResponse = await request(testContext.app)
             .post("/documents/upload")
@@ -309,7 +325,9 @@ describe("Document Upload E2E", () => {
         expect(summaryResponse.body.fileName).toBe("summary-test.csv");
         expect(summaryResponse.body.processingStatus).toBeDefined();
         expect(summaryResponse.body.uploadedAt).toBeDefined();
-        expect(summaryResponse.body.processingMetrics).toBeDefined();
+        // Processing metrics are flat fields on the response, not a nested "processingMetrics" object
+        expect(summaryResponse.body.totalTransactionsFound).toBeDefined();
+        expect(summaryResponse.body.importedTransactionCount).toBeDefined();
     });
 });
 
@@ -321,6 +339,8 @@ describe("Authorization E2E", () => {
         const csvContent = Buffer.from("Date,Amount\\n2024-01-01,100");
         const household1 = EntityId(uuidv4());
         const household2 = EntityId(uuidv4());
+        await createTestHousehold(household1);
+        await createTestHousehold(household2);
 
         // Upload to household 1
         const uploadResponse = await request(testContext.app)
@@ -345,7 +365,7 @@ describe("Authorization E2E", () => {
             .set("X-Correlation-Id", uuidv4());
 
         expect(accessResponse.status).toBe(403); // Forbidden
-        expect(accessResponse.body.errorCode).toContain("UNAUTHORIZED");
+        expect(accessResponse.body.errorCode).toContain("DOCUMENT_ACCESS_DENIED");
     });
 
     /**
@@ -355,6 +375,8 @@ describe("Authorization E2E", () => {
         const csvContent = Buffer.from("Date,Amount\\n2024-01-01,100");
         const household1 = EntityId(uuidv4());
         const household2 = EntityId(uuidv4());
+        await createTestHousehold(household1);
+        await createTestHousehold(household2);
 
         // Upload to household 1
         await request(testContext.app)
@@ -389,13 +411,13 @@ describe("Authorization E2E", () => {
             .set("X-Correlation-Id", uuidv4());
 
         expect(list1.status).toBe(200);
-        const household1Docs = list1.body.documents.filter(
+        const household1Docs = list1.body.filter(
             (doc: any) => doc.fileName === "household1.csv"
         );
         expect(household1Docs.length).toBe(1);
 
         // Verify household 2 docs not included
-        const household2Docs = list1.body.documents.filter(
+        const household2Docs = list1.body.filter(
             (doc: any) => doc.fileName === "household2.csv"
         );
         expect(household2Docs.length).toBe(0);

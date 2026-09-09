@@ -497,6 +497,10 @@ describe("AI Orchestrator - End-to-End", () => {
             months: [],
         }));
 
+        executor.registerTool("analyze_budget_variance", async () => ({
+            categories: [],
+        }));
+
         executor.registerTool("get_debt_summary", async () => ({
             totalDebtCents: 25000,
         }));

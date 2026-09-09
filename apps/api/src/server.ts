@@ -103,6 +103,7 @@ import { registerDocumentProcessingWorker } from "./queue/document-processor";
 import { registerBudgetApprovalRoutes } from "./routes/budget-approval";
 import { registerAdvisorConversationRoutes } from "./routes/advisor-conversations";
 import { registerOrchestratorRoutes } from "./routes/ai-orchestrator";
+import { registerToolExecutionRoutes } from "./routes/tool-execution";
 
 /**
  * Error with context
@@ -144,8 +145,10 @@ declare global {
 export function createServer(): Express {
     const app = express();
 
-    // Middleware: Parse JSON
-    app.use(express.json());
+    // Middleware: Parse JSON. Limit must exceed the 50MB upload max (base64-encoded fileContent
+    // inflates ~33%) so oversized files reach validateDocumentUpload's clean 400 error instead of
+    // body-parser rejecting them first with an unhandled 413.
+    app.use(express.json({ limit: "75mb" }));
 
     // Middleware: CORS - Allow requests from web app
     app.use(cors({
@@ -2748,6 +2751,7 @@ export function createServer(): Express {
     registerBudgetApprovalRoutes(approvalRouteContext);
     registerAdvisorConversationRoutes(approvalRouteContext);
     registerOrchestratorRoutes(approvalRouteContext);
+    registerToolExecutionRoutes(approvalRouteContext);
 
     /**
      * 404 handler
@@ -2781,13 +2785,30 @@ export function createServer(): Express {
             timestamp: new Date().toISOString()
         });
 
-        // Handle known API errors
-        if (err instanceof ApiError) {
+        // Handle known API errors. Multiple route modules define their own local ApiError-shaped
+        // classes (tool-execution.ts, advisor-conversations.ts, etc.) - `instanceof` against this
+        // file's class would miss those, so duck-type on the well-known shape instead.
+        if (
+            err instanceof ApiError ||
+            (typeof err?.statusCode === "number" && typeof err?.userMessage === "string" && typeof err?.errorCode === "string")
+        ) {
             return res.status(err.statusCode).json({
                 userMessage: err.userMessage,
                 errorCode: err.errorCode,
                 correlationId,
-                retryable: err.retryable,
+                retryable: err.retryable ?? false,
+                timestamp: new Date().toISOString(),
+            });
+        }
+
+        // Handle body-parser payload-too-large errors (e.g. a request exceeding express.json()'s
+        // limit) - surface the same clean, user-facing shape as validateDocumentUpload's own check.
+        if (err.type === "entity.too.large" || err.status === 413) {
+            return res.status(400).json({
+                userMessage: "Your file is larger than 50MB. Please upload a smaller statement.",
+                errorCode: "UPLOAD_FILE_TOO_LARGE",
+                correlationId,
+                retryable: false,
                 timestamp: new Date().toISOString(),
             });
         }
