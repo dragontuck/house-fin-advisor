@@ -107,6 +107,14 @@ export class PrivacyGateway {
         // Deep copy to avoid modifying original
         const input = JSON.parse(JSON.stringify(context));
 
+        // Reject known-forbidden field names outright (defense-in-depth alongside the
+        // pattern/classification check below - was previously only checked by the unused
+        // isContextSafe() path).
+        if (!this.validateContextAllowlist(input)) {
+            this.logger.logDecision(correlationId, "root", "", DataClassification.RESTRICTED, "rejected", "Forbidden field name present in context");
+            throw new Error("Privacy violation: context contains a forbidden field name");
+        }
+
         // Validate - reject if any restricted data found
         this.validateContext(input, correlationId);
 

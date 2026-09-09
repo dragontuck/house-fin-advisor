@@ -353,8 +353,10 @@ export function createServer(): Express {
             findByHouseholdId: (householdId: EntityId) => settingsRepo.findByHouseholdId(householdId),
         },
         recurringPatternsRepo: {
-            // Recurring pattern detection is not yet persisted; treated as empty until implemented.
-            findByHouseholdId: async () => [],
+            // Detected from the last 6 months of transactions via the Slice 3 recurring detector -
+            // was previously hardcoded to always return [], silently starving budget planning/
+            // diagnosis of recurring-expense awareness.
+            findByHouseholdId: (householdId: EntityId) => computeRecurringPatterns(householdId),
         },
         snapshotRepo: {
             findLatestByHouseholdId: (householdId: EntityId) => snapshotRepo.findLatestByHouseholdId(householdId),
@@ -418,8 +420,132 @@ export function createServer(): Express {
     // Initialize AI tool executor
     const toolExecutor = new AIToolExecutor();
 
-    // Register tool handlers with executor
-    // These are placeholder implementations - real implementations should fetch from repositories
+    /**
+     * Shared health/attention-item computation - used by both GET /health/summary and the
+     * get_attention_items AI tool, so the AI never has a different (or missing) view of
+     * attention items than the dashboard.
+     */
+    async function computeHealthAnalysis(householdId: EntityId) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth() + 1;
+
+        const [settings, liquidCash, accounts, goalList, budgets, transactions, lastTxRow] =
+            await Promise.all([
+                cashFlowRepo.getHouseholdSettings(householdId),
+                cashFlowRepo.getLiquidCashCents(householdId),
+                debtRepo.findActiveAccountsByHousehold(householdId),
+                savingsGoalRepo.findByHouseholdId(householdId),
+                budgetRepo.findByHouseholdAndPeriod(householdId, year, month),
+                budgetRepo.getTransactionsForPeriod(householdId, year, month),
+                cashFlowRepo.getTransactionsForRange(
+                    householdId,
+                    new Date(now.getFullYear(), now.getMonth(), 1),
+                    now,
+                ),
+            ]);
+
+        const monthlyIncomeCents = settings?.monthlyIncome ?? 0;
+        const essentialExpensesCents = settings?.monthlyEssentialExpenses ?? 0;
+        const monthlySurplusCents = monthlyIncomeCents - essentialExpensesCents - (settings?.monthlyDiscretionaryExpenses ?? 0);
+
+        const efPolicy = {
+            minimumMonths: settings?.emergencyFundMinimumMonths ?? 3,
+            targetMonths: settings?.emergencyFundTargetMonths ?? 6,
+            stretchMonths: settings?.emergencyFundStretchMonths ?? 9,
+        };
+        const efGoal = await savingsGoalRepo.findEmergencyFundGoal(householdId);
+        const efResult = savingsGoalService.analyzeEmergencyFund({
+            householdId,
+            eligibleCashCents: liquidCash,
+            essentialMonthlyExpensesCents: essentialExpensesCents,
+            policy: efPolicy,
+            activeMonthlyContributionCents: efGoal?.monthlyContributionCents ?? 0,
+            asOf: now,
+        });
+
+        const debtResult = debtService.analyze({
+            householdId,
+            accounts,
+            monthlyIncomeCents,
+            asOf: now,
+        });
+
+        const budgetResultSet = budgetService.calculateResults({
+            householdId,
+            period: { year, month },
+            budgets,
+            transactions,
+            asOf: now,
+        });
+        const overBudget = budgetResultSet.results
+            .filter(r => r.varianceCents > 0 && r.variancePercent !== null && r.variancePercent > 0)
+            .map(r => ({
+                category: r.category,
+                varianceCents: r.varianceCents as number,
+                variancePercent: r.variancePercent!,
+            }));
+
+        const goalSummaries = goalList.map(g => {
+            const gr = savingsGoalService.calculateGoal({ goal: g, asOf: now });
+            return { goalId: g.id, name: g.name, status: gr.status, percentComplete: gr.percentComplete, targetDate: g.targetDate };
+        });
+
+        const lastTxDate = lastTxRow.length > 0
+            ? lastTxRow.reduce((latest, t) => t.transactionDate > latest ? t.transactionDate : latest, lastTxRow[0].transactionDate)
+            : null;
+
+        const priorMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const priorSnapshots = await snapshotRepo.findByHouseholdIdSince(householdId, priorMonthDate);
+        let previousRevolvingDebtCents: number | null = null;
+        if (priorSnapshots.length > 0) {
+            const priorSnapshot = priorSnapshots.reduce((latest, s) =>
+                new Date(s.calculatedAt) > new Date(latest.calculatedAt) ? s : latest
+            );
+            try {
+                const priorDebtResult = debtService.analyze({
+                    householdId,
+                    accounts,
+                    monthlyIncomeCents,
+                    asOf: new Date(priorSnapshot.asOf),
+                });
+                previousRevolvingDebtCents = priorDebtResult.revolvingDebtCents;
+            } catch (error) {
+                console.warn("[HEALTH_SUMMARY] Failed to analyze prior debt:", error instanceof Error ? error.message : String(error));
+            }
+        }
+
+        return healthEngine.analyze({
+            householdId,
+            asOf: now,
+            monthlySurplusCents,
+            monthlyIncomeCents,
+            liquidCashCents: liquidCash,
+            essentialMonthlyExpensesCents: essentialExpensesCents,
+            emergencyFundCoverageMonths: essentialExpensesCents > 0 ? efResult.currentCoverageMonths : null,
+            emergencyFundMinimumMonths: efPolicy.minimumMonths,
+            emergencyFundTargetMonths: efPolicy.targetMonths,
+            debtStatus: debtResult.status,
+            revolvingDebtCents: debtResult.revolvingDebtCents,
+            previousRevolvingDebtCents,
+            overBudgetResults: overBudget,
+            goalResults: goalSummaries,
+            lastTransactionDate: lastTxDate,
+            recurringExpenseChanges: [],
+        });
+    }
+
+    /** Detects recurring income/expense patterns from the last 6 months of transactions. */
+    async function computeRecurringPatterns(householdId: EntityId) {
+        const asOf = new Date();
+        const from = new Date(asOf.getFullYear(), asOf.getMonth() - 6, asOf.getDate());
+        const transactions = await cashFlowRepo.getTransactionsForRange(householdId, from, asOf);
+        return recurringDetector.detectPatterns(transactions, asOf);
+    }
+
+    // Register tool handlers with executor - each delegates to the same domain services and
+    // repositories used by the equivalent REST endpoints (never raw transaction lists, and never
+    // duplicate business rules).
     toolExecutor.registerTool("get_financial_snapshot", async (params: Record<string, unknown>, context) => {
         const householdId = context.householdId;
         const snapshot = await snapshotRepo.findLatestByHouseholdId(householdId);
@@ -428,74 +554,170 @@ export function createServer(): Express {
 
     toolExecutor.registerTool("get_cash_flow", async (params: Record<string, unknown>, context) => {
         const householdId = context.householdId;
-        const now = new Date();
-        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        const transactions = await cashFlowRepo.getTransactionsForRange(householdId, thirtyDaysAgo, now);
-        return { transactions };
+        const asOf = new Date();
+        const { from, to } = historyWindow(asOf, 6);
+
+        const [transactions, liquidCash, settings, currentBudgets] = await Promise.all([
+            cashFlowRepo.getTransactionsForRange(householdId, from, to),
+            cashFlowRepo.getLiquidCashCents(householdId),
+            cashFlowRepo.getHouseholdSettings(householdId),
+            cashFlowRepo.getBudgetsForPeriod(householdId, asOf.getFullYear(), asOf.getMonth() + 1),
+        ]);
+
+        const patterns = recurringDetector.detectPatterns(transactions, asOf);
+        const monthSet = new Set(transactions.map(tx => `${tx.transactionDate.getFullYear()}-${tx.transactionDate.getMonth() + 1}`));
+        const currentMonthTxs = transactions.filter(tx =>
+            tx.transactionDate.getFullYear() === asOf.getFullYear() && tx.transactionDate.getMonth() + 1 === asOf.getMonth() + 1
+        );
+
+        const projection = cashFlowService.calculateCurrentProjection({
+            householdId,
+            asOf,
+            liquidCashCents: liquidCash,
+            currentMonthTransactions: currentMonthTxs,
+            historicalPatterns: patterns,
+            currentMonthBudgets: currentBudgets,
+            householdSettings: settings,
+            historyMonthCount: monthSet.size,
+        });
+
+        return { currentMonth: projection } as unknown as Record<string, unknown>;
     });
 
     toolExecutor.registerTool("get_current_budget", async (params: Record<string, unknown>, context) => {
         const householdId = context.householdId;
         const now = new Date();
         const budgets = await budgetRepo.findByHouseholdAndPeriod(householdId, now.getFullYear(), now.getMonth() + 1);
-        return budgets.length > 0 ? { budgets } : { error: "No current budget found" };
+        if (budgets.length === 0) return { error: "No current budget found" };
+        // Most recently updated budget row - used by classifyStaleSnapshot to detect stale plans.
+        const asOf = budgets.reduce((latest, b) => (b.updatedAt > latest ? b.updatedAt : latest), budgets[0].updatedAt);
+        return {
+            householdId,
+            period: `${now.getFullYear()}-${now.getMonth() + 1}`,
+            budgets,
+            totalBudgetedCents: budgets.reduce((sum, b) => sum + b.amountCents, 0),
+            categoryCount: budgets.length,
+            asOf,
+        };
     });
 
     toolExecutor.registerTool("get_budget_status", async (params: Record<string, unknown>, context) => {
         const householdId = context.householdId;
         const now = new Date();
-        const budgets = await budgetRepo.findByHouseholdAndPeriod(householdId, now.getFullYear(), now.getMonth() + 1);
-
-        const transactions = await cashFlowRepo.getTransactionsForRange(
+        const year = now.getFullYear();
+        const month = now.getMonth() + 1;
+        const [budgets, transactions] = await Promise.all([
+            budgetRepo.findByHouseholdAndPeriod(householdId, year, month),
+            budgetRepo.getTransactionsForPeriod(householdId, year, month),
+        ]);
+        // budgetService.calculateResults() already carries asOf/calculatedAt/calculationVersion -
+        // no raw transaction list is exposed to the LLM, only the aggregated result set.
+        return budgetService.calculateResults({
             householdId,
-            new Date(now.getFullYear(), now.getMonth(), 1),
-            new Date(now.getFullYear(), now.getMonth() + 1, 1)
-        );
-
-        return {
-            status: "ok",
+            period: { year, month },
             budgets,
             transactions,
-        };
+            asOf: now,
+        }) as unknown as Record<string, unknown>;
     });
 
     toolExecutor.registerTool("get_historical_budget_performance", async (params: Record<string, unknown>, context) => {
         const householdId = context.householdId;
         const now = new Date();
-        // Get budgets for the last 12 months
-        const history = [];
-        for (let i = 0; i < 12; i++) {
-            const month = now.getMonth() - i + 1;
-            const year = now.getFullYear() + Math.floor((month - 1) / 12);
-            const adjustedMonth = ((month - 1) % 12) + 1;
-            const budgets = await budgetRepo.findByHouseholdAndPeriod(householdId, year, adjustedMonth);
-            if (budgets.length > 0) history.push({ month: adjustedMonth, year, budgets });
+        const monthsRequested = Math.min((params.months as number) || 3, 12);
+        const months = [];
+        for (let i = 0; i < monthsRequested; i++) {
+            const raw = now.getMonth() - i + 1;
+            const year = now.getFullYear() + Math.floor((raw - 1) / 12);
+            const month = ((raw - 1 + 12 * 100) % 12) + 1;
+            const [budgets, transactions] = await Promise.all([
+                budgetRepo.findByHouseholdAndPeriod(householdId, year, month),
+                budgetRepo.getTransactionsForPeriod(householdId, year, month),
+            ]);
+            if (budgets.length === 0 && transactions.length === 0) continue;
+            const resultSet = budgetService.calculateResults({ householdId, period: { year, month }, budgets, transactions, asOf: now });
+            months.push({
+                period: `${year}-${month}`,
+                categories: resultSet.results,
+                totalBudgetedCents: resultSet.totalPlannedCents,
+                totalActualCents: resultSet.totalActualCents,
+                totalVarianceCents: resultSet.totalVarianceCents,
+                calculatedAt: resultSet.calculatedAt,
+            });
         }
-        return { history };
+        return { householdId, months };
     });
 
     toolExecutor.registerTool("get_goal_status", async (params: Record<string, unknown>, context) => {
         const householdId = context.householdId;
+        const asOf = new Date();
         const goals = await savingsGoalRepo.findByHouseholdId(householdId);
-        return { goals };
+        const goalResults = goals.map(goal => ({ ...goal, ...savingsGoalService.calculateGoal({ goal, asOf }) }));
+        return {
+            householdId,
+            goals: goalResults,
+            activeGoalCount: goalResults.filter(g => g.status !== "COMPLETED").length,
+            completedGoalCount: goalResults.filter(g => g.status === "COMPLETED").length,
+            totalTargetCents: goals.reduce((sum, g) => sum + g.targetAmountCents, 0),
+            totalCurrentProgressCents: goals.reduce((sum, g) => sum + g.currentAmountCents, 0),
+        };
     });
 
     toolExecutor.registerTool("get_debt_summary", async (params: Record<string, unknown>, context) => {
         const householdId = context.householdId;
-        const debtAccounts = await debtRepo.findActiveAccountsByHousehold(householdId);
-        return { debtAccounts };
+        const asOf = new Date();
+        const [accounts, settings] = await Promise.all([
+            debtRepo.findActiveAccountsByHousehold(householdId),
+            cashFlowRepo.getHouseholdSettings(householdId),
+        ]);
+        const analysis = debtService.analyze({
+            householdId,
+            accounts,
+            monthlyIncomeCents: settings?.monthlyIncome ?? 0,
+            asOf,
+        });
+        return {
+            householdId,
+            totalDebtCents: analysis.totalDebtCents,
+            debtAccounts: analysis.accounts,
+            debtHealthStatus: analysis.status,
+            monthlyMinimumPaymentCents: analysis.totalMinimumPaymentCents,
+            analysis,
+        };
     });
 
     toolExecutor.registerTool("get_attention_items", async (params: Record<string, unknown>, context) => {
         const householdId = context.householdId;
-        const items = await reviewItemRepo.listReviewItems(householdId);
-        return { items };
+        // Sourced from the same health-engine analysis the dashboard uses - was previously wired
+        // to the statement review queue, an unrelated data source.
+        const analysis = await computeHealthAnalysis(householdId);
+        const items = analysis.attentionItems;
+        return {
+            householdId,
+            items,
+            criticalCount: items.filter(i => i.severity === "CRITICAL").length,
+            highCount: 0,
+            mediumCount: items.filter(i => i.severity === "WARNING").length,
+            lowCount: items.filter(i => i.severity === "INFO").length,
+            asOf: analysis.asOf,
+        };
     });
 
     toolExecutor.registerTool("get_recurring_financial_items", async (params: Record<string, unknown>, context) => {
         const householdId = context.householdId;
-        const snapshot = await snapshotRepo.findLatestByHouseholdId(householdId);
-        return snapshot ? { recurringItems: [] } : { recurringItems: [] };
+        const patterns = await computeRecurringPatterns(householdId);
+        const incomePatterns = patterns.filter(p => p.direction === "CREDIT");
+        const expensePatterns = patterns.filter(p => p.direction === "DEBIT");
+        const sum = (arr: typeof patterns) => arr.reduce((s, p) => s + p.typicalAmountCents, 0);
+        return {
+            householdId,
+            incomePatterns,
+            expensePatterns,
+            estimatedMonthlyIncomeCents: sum(incomePatterns),
+            estimatedMonthlyExpensesCents: sum(expensePatterns),
+            estimatedMonthlySurplusCents: sum(incomePatterns) - sum(expensePatterns),
+            totalPatternsFound: patterns.length,
+        };
     });
 
     toolExecutor.registerTool("simulate_purchase", async (params: Record<string, unknown>, context) => {
@@ -2516,125 +2738,7 @@ export function createServer(): Express {
         async (req: Request, res: Response, next: NextFunction) => {
             try {
                 const { householdId } = req.context;
-                const now = new Date();
-                const year = now.getFullYear();
-                const month = now.getMonth() + 1;
-
-                // Gather all inputs in parallel
-                const [settings, liquidCash, accounts, goalList, budgets, transactions, lastTxRow] =
-                    await Promise.all([
-                        cashFlowRepo.getHouseholdSettings(householdId),
-                        cashFlowRepo.getLiquidCashCents(householdId),
-                        debtRepo.findActiveAccountsByHousehold(householdId),
-                        savingsGoalRepo.findByHouseholdId(householdId),
-                        budgetRepo.findByHouseholdAndPeriod(householdId, year, month),
-                        budgetRepo.getTransactionsForPeriod(householdId, year, month),
-                        cashFlowRepo.getTransactionsForRange(
-                            householdId,
-                            new Date(now.getFullYear(), now.getMonth(), 1),
-                            now,
-                        ),
-                    ]);
-
-                const monthlyIncomeCents = settings?.monthlyIncome ?? 0;
-                const essentialExpensesCents = settings?.monthlyEssentialExpenses ?? 0;
-                const monthlySurplusCents = monthlyIncomeCents - essentialExpensesCents - (settings?.monthlyDiscretionaryExpenses ?? 0);
-
-                // Emergency fund coverage
-                const efPolicy = {
-                    minimumMonths: settings?.emergencyFundMinimumMonths ?? 3,
-                    targetMonths: settings?.emergencyFundTargetMonths ?? 6,
-                    stretchMonths: settings?.emergencyFundStretchMonths ?? 9,
-                };
-                const efGoal = await savingsGoalRepo.findEmergencyFundGoal(householdId);
-                const efResult = savingsGoalService.analyzeEmergencyFund({
-                    householdId,
-                    eligibleCashCents: liquidCash,
-                    essentialMonthlyExpensesCents: essentialExpensesCents,
-                    policy: efPolicy,
-                    activeMonthlyContributionCents: efGoal?.monthlyContributionCents ?? 0,
-                    asOf: now,
-                });
-
-                // Debt analysis
-                const debtResult = debtService.analyze({
-                    householdId,
-                    accounts,
-                    monthlyIncomeCents,
-                    asOf: now,
-                });
-
-                // Budget results — only OVER_BUDGET categories with variancePercent > 0
-                const budgetResultSet = budgetService.calculateResults({
-                    householdId,
-                    period: { year, month },
-                    budgets,
-                    transactions,
-                    asOf: now,
-                });
-                const overBudget = budgetResultSet.results
-                    .filter(r => r.varianceCents > 0 && r.variancePercent !== null && r.variancePercent > 0)
-                    .map(r => ({
-                        category: r.category,
-                        varianceCents: r.varianceCents as number,
-                        variancePercent: r.variancePercent!,
-                    }));
-
-                // Goal summaries
-                const goalSummaries = goalList.map(g => {
-                    const gr = savingsGoalService.calculateGoal({ goal: g, asOf: now });
-                    return { goalId: g.id, name: g.name, status: gr.status, percentComplete: gr.percentComplete, targetDate: g.targetDate };
-                });
-
-                // Last transaction date from this month's data (rough freshness check)
-                const lastTxDate = lastTxRow.length > 0
-                    ? lastTxRow.reduce((latest, t) => t.transactionDate > latest ? t.transactionDate : latest, lastTxRow[0].transactionDate)
-                    : null;
-
-                // Query prior month's snapshot to detect debt increase trends
-                const priorMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-                const priorSnapshots = await snapshotRepo.findByHouseholdIdSince(householdId, priorMonthDate);
-                let previousRevolvingDebtCents: number | null = null;
-                if (priorSnapshots.length > 0) {
-                    // Get the most recent snapshot from prior month
-                    const priorSnapshot = priorSnapshots.reduce((latest, s) =>
-                        new Date(s.calculatedAt) > new Date(latest.calculatedAt) ? s : latest
-                    );
-                    // Query accounts from the source to analyze prior debt
-                    const priorAccounts = accounts; // Use current accounts; could enhance by querying historical account states
-                    try {
-                        const priorDebtResult = debtService.analyze({
-                            householdId,
-                            accounts: priorAccounts,
-                            monthlyIncomeCents,
-                            asOf: new Date(priorSnapshot.asOf),
-                        });
-                        previousRevolvingDebtCents = priorDebtResult.revolvingDebtCents;
-                    } catch (error) {
-                        // If prior analysis fails, leave as null (no prior data)
-                        console.warn("[HEALTH_SUMMARY] Failed to analyze prior debt:", error instanceof Error ? error.message : String(error));
-                    }
-                }
-
-                const analysis = healthEngine.analyze({
-                    householdId,
-                    asOf: now,
-                    monthlySurplusCents,
-                    monthlyIncomeCents,
-                    liquidCashCents: liquidCash,
-                    essentialMonthlyExpensesCents: essentialExpensesCents,
-                    emergencyFundCoverageMonths: essentialExpensesCents > 0 ? efResult.currentCoverageMonths : null,
-                    emergencyFundMinimumMonths: efPolicy.minimumMonths,
-                    emergencyFundTargetMonths: efPolicy.targetMonths,
-                    debtStatus: debtResult.status,
-                    revolvingDebtCents: debtResult.revolvingDebtCents,
-                    previousRevolvingDebtCents,
-                    overBudgetResults: overBudget,
-                    goalResults: goalSummaries,
-                    lastTransactionDate: lastTxDate,
-                    recurringExpenseChanges: [],
-                });
-
+                const analysis = await computeHealthAnalysis(householdId);
                 res.json(analysis);
             } catch (error) {
                 next(error);

@@ -105,23 +105,40 @@ function forEachSuccessfulResult(toolResults: ToolExecutionResult[], visit: (val
     }
 }
 
-/** Collects every `*Cents` figure from successful tool results, as dollar amounts. */
+/**
+ * Money-typed fields that don't follow the `*Cents` naming convention (e.g. FinancialSnapshot's
+ * cash/debt/netWorth). Grounding must still validate dollar figures derived from these - without
+ * this list, any number the LLM states about cash position, debt, or net worth would be
+ * completely unchecked.
+ */
+const BARE_MONEY_FIELD_NAMES = new Set([
+    "cash",
+    "debt",
+    "netWorth",
+    "monthlyIncome",
+    "monthlyEssentialExpenses",
+    "monthlyDiscretionaryExpenses",
+    "monthlySurplus",
+]);
+
+/** Collects every `*Cents` figure (plus known bare-Money fields) from successful tool results, as dollar amounts. */
 function collectGroundTruthDollarAmounts(toolResults: ToolExecutionResult[]): Set<number> {
     const amounts = new Set<number>();
     forEachSuccessfulResult(toolResults, (value, key) => {
-        if (typeof value === "number" && key && /Cents$/.test(key)) {
-            const dollars = value / 100;
-            const abs = Math.abs(dollars);
-            // Register both signed and unsigned forms - narration ("-$400" vs "$400 over")
-            // doesn't always carry the sign into the number a reader would quote.
-            amounts.add(Math.round(dollars * 100) / 100);
-            amounts.add(Math.round(dollars));
-            amounts.add(Math.round(abs * 100) / 100);
-            amounts.add(Math.round(abs));
-        }
+        if (typeof value !== "number" || !key) return;
+        if (!/Cents$/.test(key) && !BARE_MONEY_FIELD_NAMES.has(key)) return;
+        const dollars = value / 100;
+        const abs = Math.abs(dollars);
+        // Register both signed and unsigned forms - narration ("-$400" vs "$400 over")
+        // doesn't always carry the sign into the number a reader would quote.
+        amounts.add(Math.round(dollars * 100) / 100);
+        amounts.add(Math.round(dollars));
+        amounts.add(Math.round(abs * 100) / 100);
+        amounts.add(Math.round(abs));
     });
     return amounts;
 }
+
 
 /** Collects known status enum values (lowercased, "_" -> " ") present in tool results. */
 function collectGroundTruthStatusPhrases(toolResults: ToolExecutionResult[]): Set<string> {
@@ -133,6 +150,19 @@ function collectGroundTruthStatusPhrases(toolResults: ToolExecutionResult[]): Se
         }
     });
     return phrases;
+}
+
+/** Phrases claiming something IS affordable vs. IS NOT - mutually exclusive by construction. */
+const AFFORDABLE_PHRASES = ["can afford", "is affordable", "you can afford", "affordable"];
+const UNAFFORDABLE_PHRASES = ["can't afford", "cannot afford", "not affordable", "unaffordable", "isn't affordable", "is not affordable"];
+
+/** Finds the most recent `isAffordable` boolean among successful tool results (e.g. simulate_purchase). */
+function collectGroundTruthAffordability(toolResults: ToolExecutionResult[]): boolean | undefined {
+    let found: boolean | undefined;
+    forEachSuccessfulResult(toolResults, (value, key) => {
+        if (key === "isAffordable" && typeof value === "boolean") found = value;
+    });
+    return found;
 }
 
 /** Collects known "YYYY-M" year-month pairs from date-like fields in tool results. */
@@ -245,6 +275,26 @@ export function validateGroundedResponse(responseText: string, toolResults: Tool
                     detail: `Response references a date (${mention}) not found in the underlying data.`,
                 });
             }
+        }
+    }
+
+    // Affordability contradiction - e.g. simulate_purchase computed isAffordable:true but the
+    // response's own conclusion says the opposite (or vice versa).
+    const actualAffordability = collectGroundTruthAffordability(toolResults);
+    if (actualAffordability !== undefined) {
+        const lowerText = responseText.toLowerCase();
+        const saysUnaffordable = UNAFFORDABLE_PHRASES.some((p) => lowerText.includes(p));
+        const saysAffordable = !saysUnaffordable && AFFORDABLE_PHRASES.some((p) => lowerText.includes(p));
+        if (actualAffordability && saysUnaffordable) {
+            violations.push({
+                type: "TOOL_RESULT_CONTRADICTION",
+                detail: "Response suggests the purchase is not affordable, but the simulation found it affordable.",
+            });
+        } else if (!actualAffordability && saysAffordable) {
+            violations.push({
+                type: "TOOL_RESULT_CONTRADICTION",
+                detail: "Response suggests the purchase is affordable, but the simulation found it is not.",
+            });
         }
     }
 

@@ -263,12 +263,16 @@ export const registerAdvisorConversationRoutes: RouteRegistrar = (context: Route
                     const extractedPlanning = WorkflowStateManager.extractPlanningData(content);
 
                     if (extractedPlanning.activities.length > 0 || extractedPlanning.constraints.length > 0) {
-                        // Create workflow for this planning conversation
-                        const workflow = await advisorService.startWorkflow(
-                            householdId as EntityId,
-                            classifiedIntent.intent as AdvisorWorkflow,
-                            conversationId as EntityId
-                        );
+                        // Reuse this conversation's existing active workflow so activities/
+                        // constraints accumulate across turns - previously a new (empty) workflow
+                        // was created on every planning message, silently discarding prior state.
+                        const existingWorkflows = await workflowRepo.findByConversationId(conversationId as EntityId);
+                        const workflow = existingWorkflows.find((w) => w.status === "ACTIVE")
+                            ?? await advisorService.startWorkflow(
+                                householdId as EntityId,
+                                classifiedIntent.intent as AdvisorWorkflow,
+                                conversationId as EntityId
+                            );
 
                         // Update workflow with extracted planning data
                         const updated = await contextService.updateWorkflowStateFromMessage(
@@ -279,8 +283,8 @@ export const registerAdvisorConversationRoutes: RouteRegistrar = (context: Route
                         // Merge updated changes back into workflow for description
                         const mergedWorkflow = { ...workflow, ...updated };
 
-                        // Store updated workflow in database
-                        await workflowRepo.update(workflow.id, updated);
+                        // Store updated workflow in database (optimistically-locked on the version just read)
+                        await workflowRepo.update(workflow.id, updated, workflow.version);
 
                         // Get human-readable description
                         workflowDescription = WorkflowStateManager.describeWorkflowState(mergedWorkflow as any);

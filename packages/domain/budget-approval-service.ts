@@ -39,6 +39,19 @@ export interface BudgetValidationResult {
 }
 
 /**
+ * Tool names that would indicate the AI directly wrote budgets if ever executed. None of these
+ * exist in the current AI tool registry (packages/contracts/ai-tools.ts) - this is a forward-
+ * looking guard so a future tool with a persisting name can never slip past approval.
+ */
+const FORBIDDEN_DIRECT_PERSISTENCE_TOOLS = new Set([
+    "create_budget",
+    "update_budget",
+    "delete_budget",
+    "persist_budget",
+    "save_budget",
+]);
+
+/**
  * Service for managing the budget approval workflow
  */
 export class BudgetApprovalService {
@@ -167,11 +180,13 @@ export class BudgetApprovalService {
      * Returns error message if violation detected
      */
     validateNoDirectPersistence(toolExecutionContext: Record<string, unknown>): string | null {
-        // Check if create_budget or update_budget tools were called
+        // Tools that would indicate direct persistence if ever executed - NOT the legitimate
+        // proposal-generating tools (create_initial_budget, plan_next_month_budget), which only
+        // ever compute and return a proposal, never write to the budgets table.
         const attemptedTools = (toolExecutionContext.toolsExecuted as string[]) || [];
 
         for (const tool of attemptedTools) {
-            if (tool === "create_initial_budget" || tool === "plan_next_month_budget") {
+            if (FORBIDDEN_DIRECT_PERSISTENCE_TOOLS.has(tool)) {
                 return `LLM attempted to directly persist budget using "${tool}" tool. This is not allowed - proposals must go through user approval first.`;
             }
         }

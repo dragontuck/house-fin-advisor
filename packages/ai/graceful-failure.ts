@@ -22,6 +22,7 @@ export enum AdvisorFailureCategory {
     PRIVACY_REJECTED = "PRIVACY_REJECTED",
     STALE_SNAPSHOT = "STALE_SNAPSHOT",
     FINANCIAL_ENGINE_UNAVAILABLE = "FINANCIAL_ENGINE_UNAVAILABLE",
+    DIRECT_PERSISTENCE_BLOCKED = "DIRECT_PERSISTENCE_BLOCKED",
 }
 
 export interface AdvisorFailure {
@@ -68,6 +69,10 @@ const FAILURE_COPY: Record<AdvisorFailureCategory, { message: string; retryable:
         message: "I can't safely answer this financial question because the current calculation service is unavailable.",
         retryable: true,
     },
+    [AdvisorFailureCategory.DIRECT_PERSISTENCE_BLOCKED]: {
+        message: "I can only propose changes - a household member has to explicitly review and approve them before anything is saved.",
+        retryable: false,
+    },
 };
 
 export function buildAdvisorFailure(category: AdvisorFailureCategory): AdvisorFailure {
@@ -96,6 +101,11 @@ export function classifyLLMError(error: unknown): AdvisorFailure {
 /** Classifies a privacy gateway rejection - never surfaces which internal rule matched. */
 export function classifyPrivacyError(): AdvisorFailure {
     return buildAdvisorFailure(AdvisorFailureCategory.PRIVACY_REJECTED);
+}
+
+/** Classifies a blocked attempt to have a tool directly persist financial state without approval. */
+export function classifyDirectPersistenceAttempt(): AdvisorFailure {
+    return buildAdvisorFailure(AdvisorFailureCategory.DIRECT_PERSISTENCE_BLOCKED);
 }
 
 /**

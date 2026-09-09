@@ -69,11 +69,12 @@ export interface AdvisorMessageRepository {
  */
 export interface WorkflowStateRepository {
     create(
-        req: Omit<WorkflowState, "id" | "createdAt" | "updatedAt">
+        req: Omit<WorkflowState, "id" | "createdAt" | "updatedAt" | "version">
     ): Promise<WorkflowState>;
     findById(id: EntityId): Promise<WorkflowState | null>;
     findByConversationId(conversationId: EntityId): Promise<WorkflowState[]>;
-    update(id: EntityId, changes: Partial<WorkflowState>): Promise<WorkflowState>;
+    /** `expectedVersion` must be the version read before mutating - mismatch means a lost-update race. */
+    update(id: EntityId, changes: Partial<WorkflowState>, expectedVersion: number): Promise<WorkflowState>;
     findActive(householdId: EntityId): Promise<WorkflowState[]>;
 }
 
@@ -200,13 +201,20 @@ export class AdvisorService {
     }
 
     /**
-     * Update workflow state (e.g., add known activities, update proposed changes)
+     * Update workflow state (e.g., add known activities, update proposed changes).
+     * Reads the current version first so the write can be optimistically-locked - callers that
+     * already have a freshly-read WorkflowState should prefer passing its version explicitly via
+     * the repository directly to avoid the extra read.
      */
     async updateWorkflow(
         workflowId: EntityId,
         changes: Partial<WorkflowState>
     ): Promise<WorkflowState> {
-        return this.workflowRepo.update(workflowId, changes);
+        const current = await this.workflowRepo.findById(workflowId);
+        if (!current) {
+            throw new Error(`Workflow ${workflowId} not found`);
+        }
+        return this.workflowRepo.update(workflowId, changes, current.version);
     }
 
     /**
@@ -224,7 +232,7 @@ export class AdvisorService {
         const updated = await this.workflowRepo.update(workflowId, {
             status: WorkflowStatus.APPROVED,
             completedAt: new Date(),
-        });
+        }, workflow.version);
 
         // Add system message to conversation
         await this.messageRepo.create({
@@ -252,7 +260,7 @@ export class AdvisorService {
         const updated = await this.workflowRepo.update(workflowId, {
             status: WorkflowStatus.CANCELLED,
             completedAt: new Date(),
-        });
+        }, workflow.version);
 
         // Add system message
         await this.messageRepo.create({

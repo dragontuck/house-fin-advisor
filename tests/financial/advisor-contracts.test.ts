@@ -183,6 +183,7 @@ describe("WorkflowState", () => {
             workflowType: AdvisorWorkflow.BUDGET_CREATE,
             planningPeriod: { year: 2026, month: 9 },
             status: WorkflowStatus.ACTIVE,
+            version: 1,
             createdAt: new Date(),
             updatedAt: new Date(),
         };
@@ -204,6 +205,7 @@ describe("WorkflowState", () => {
                 baselineScenario: "current_state",
             },
             status: WorkflowStatus.READY_FOR_REVIEW,
+            version: 1,
             createdAt: new Date(),
             updatedAt: new Date(),
         };
@@ -236,6 +238,7 @@ describe("WorkflowState", () => {
             workflowType: AdvisorWorkflow.BUDGET_REVISE,
             knownActivities: activities,
             status: WorkflowStatus.WAITING_FOR_USER,
+            version: 1,
             createdAt: new Date(),
             updatedAt: new Date(),
         };
@@ -268,6 +271,7 @@ describe("WorkflowState", () => {
             workflowType: AdvisorWorkflow.BUDGET_CREATE,
             assumptions,
             status: WorkflowStatus.ACTIVE,
+            version: 1,
             createdAt: new Date(),
             updatedAt: new Date(),
         };
@@ -297,6 +301,7 @@ describe("WorkflowState", () => {
                 },
             ],
             status: WorkflowStatus.WAITING_FOR_USER,
+            version: 1,
             createdAt: new Date(),
             updatedAt: new Date(),
         };
@@ -313,6 +318,7 @@ describe("WorkflowState", () => {
             linkedFinancialSnapshotId: "snapshot_999" as EntityId,
             linkedSnapshotVersion: 1,
             status: WorkflowStatus.ACTIVE,
+            version: 1,
             createdAt: new Date(),
             updatedAt: new Date(),
         };
@@ -663,6 +669,7 @@ describe("Conversation Workflow Integration", () => {
             conversationId: conversation.id,
             workflowType: AdvisorWorkflow.BUDGET_DIAGNOSE,
             status: WorkflowStatus.COMPLETED,
+            version: 1,
             createdAt: new Date(),
             updatedAt: new Date(),
             completedAt: new Date(),
@@ -698,6 +705,7 @@ describe("Conversation Workflow Integration", () => {
                     impact: "Used to estimate ongoing dining costs",
                 },
             ],
+            version: 1,
             createdAt: new Date(),
             updatedAt: new Date(),
         };
@@ -734,6 +742,7 @@ describe("Workflow Separation from Conversation History", () => {
                 },
             ],
             status: WorkflowStatus.ACTIVE,
+            version: 1,
             createdAt: new Date(),
             updatedAt: new Date(),
         };

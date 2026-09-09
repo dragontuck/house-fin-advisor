@@ -191,7 +191,7 @@ export class PgAdvisorMessageRepository implements AdvisorMessageRepository {
  */
 export class PgWorkflowStateRepository implements WorkflowStateRepository {
     async create(
-        req: Omit<WorkflowState, "id" | "createdAt" | "updatedAt">
+        req: Omit<WorkflowState, "id" | "createdAt" | "updatedAt" | "version">
     ): Promise<WorkflowState> {
         const result = await query(
             `INSERT INTO finhouse.advisor_workflow_states 
@@ -201,7 +201,7 @@ export class PgWorkflowStateRepository implements WorkflowStateRepository {
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
              RETURNING id, household_id, conversation_id, workflow_type, status, planning_period,
                        current_scenario, known_activities, proposed_changes, assumptions, pending_questions,
-                       linked_financial_snapshot_id, linked_snapshot_version, created_at, updated_at, completed_at`,
+                       linked_financial_snapshot_id, linked_snapshot_version, version, created_at, updated_at, completed_at`,
             [
                 req.householdId,
                 req.conversationId || null,
@@ -239,7 +239,7 @@ export class PgWorkflowStateRepository implements WorkflowStateRepository {
         return result.rows.map((row) => this.rowToWorkflow(row));
     }
 
-    async update(id: EntityId, changes: Partial<WorkflowState>): Promise<WorkflowState> {
+    async update(id: EntityId, changes: Partial<WorkflowState>, expectedVersion: number): Promise<WorkflowState> {
         const updates: string[] = [];
         const values: unknown[] = [];
         let p = 1;
@@ -278,13 +278,19 @@ export class PgWorkflowStateRepository implements WorkflowStateRepository {
         }
 
         updates.push(`updated_at = NOW()`);
-        values.push(id);
+        updates.push(`version = version + 1`);
+        const idParam = p++;
+        const versionParam = p++;
+        values.push(id, expectedVersion);
 
         const result = await query(
             `UPDATE finhouse.advisor_workflow_states SET ${updates.join(", ")} 
-             WHERE id = $${p} RETURNING *`,
+             WHERE id = $${idParam} AND version = $${versionParam} RETURNING *`,
             values
         );
+        if (result.rows.length === 0) {
+            throw new Error("Workflow state not found or version conflict — reload and retry");
+        }
         return this.rowToWorkflow(result.rows[0]);
     }
 
@@ -313,6 +319,7 @@ export class PgWorkflowStateRepository implements WorkflowStateRepository {
             status: row.status as WorkflowStatus,
             linkedFinancialSnapshotId: (row.linked_financial_snapshot_id as EntityId | null) || undefined,
             linkedSnapshotVersion: row.linked_snapshot_version as number | undefined,
+            version: row.version as number,
             createdAt: row.created_at as Date,
             updatedAt: row.updated_at as Date,
             completedAt: row.completed_at as Date | undefined,

@@ -132,6 +132,7 @@ describe("Multi-Turn Budget Planning Workflows", () => {
                 status: WorkflowStatus.ACTIVE,
                 createdAt: new Date(),
                 updatedAt: new Date(),
+                version: 1,
             };
         });
 
@@ -212,6 +213,7 @@ describe("Multi-Turn Budget Planning Workflows", () => {
                 householdId,
                 workflowType: AdvisorWorkflow.BUDGET_REVISE,
                 status: WorkflowStatus.ACTIVE,
+                version: 1,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             };
@@ -243,6 +245,7 @@ describe("Multi-Turn Budget Planning Workflows", () => {
                     },
                 ],
                 status: WorkflowStatus.ACTIVE,
+                version: 1,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             };
@@ -272,6 +275,7 @@ describe("Multi-Turn Budget Planning Workflows", () => {
                     },
                 ],
                 status: WorkflowStatus.ACTIVE,
+                version: 1,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             };
@@ -334,6 +338,7 @@ describe("Multi-Turn Budget Planning Workflows", () => {
                 workflowType: AdvisorWorkflow.BUDGET_REVISE,
                 planningPeriod: { year: 2026, month: 8 },
                 status: WorkflowStatus.ACTIVE,
+                version: 1,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             };
@@ -384,6 +389,7 @@ describe("Multi-Turn Budget Planning Workflows", () => {
                 workflowType: AdvisorWorkflow.BUDGET_REVISE,
                 planningPeriod: { year: 2026, month: 8 },
                 status: WorkflowStatus.ACTIVE,
+                version: 1,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             };

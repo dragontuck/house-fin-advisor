@@ -15,8 +15,18 @@
  * - All executions are logged and auditable
  */
 
-import { EntityId } from "@house-fin/contracts";
+import { EntityId, AIToolRegistry, ToolAuthorizationLevel, ToolDataClassification } from "@house-fin/contracts";
 import { PlannedToolCall } from "./ai-tool-planner";
+
+/** Tool name -> declared authorization level, sourced from the tool contracts themselves. */
+const AUTHORIZATION_LEVEL_BY_TOOL: Record<string, ToolAuthorizationLevel> = Object.fromEntries(
+    AIToolRegistry.map((tool) => [tool.name, tool.authorizationLevel])
+);
+
+/** Tool name -> declared output classification, sourced from the tool contracts themselves. */
+const OUTPUT_CLASSIFICATION_BY_TOOL: Record<string, ToolDataClassification> = Object.fromEntries(
+    AIToolRegistry.map((tool) => [tool.name, tool.outputClassification])
+);
 
 /**
  * Tool execution result
@@ -108,21 +118,17 @@ export class AIToolExecutor {
     }
 
     /**
-     * Check if member is authorized to execute a tool
-     * (Simplified version - real implementation would check tool-specific permissions)
+     * Check if member is authorized to execute a tool.
+     * Reads the tool's own declared `authorizationLevel` (AIToolRegistry) rather than a
+     * separately hand-maintained list, so new HOUSEHOLD_OWNER tools are enforced automatically.
      */
     private authorizeToolExecution(
         toolName: string,
         context: ToolExecutionContext
     ): AuthorizationCheckResult {
-        // Tools requiring owner authorization
-        const ownerOnlyTools = [
-            "create_initial_budget",
-            "plan_next_month_budget",
-            // Add others as needed
-        ];
+        const requiredLevel = AUTHORIZATION_LEVEL_BY_TOOL[toolName];
 
-        if (ownerOnlyTools.includes(toolName) && !context.isHouseholdOwner) {
+        if (requiredLevel === ToolAuthorizationLevel.HOUSEHOLD_OWNER && !context.isHouseholdOwner) {
             return {
                 authorized: false,
                 reason: `Tool '${toolName}' requires household owner authorization`,
@@ -265,16 +271,19 @@ export class AIToolExecutor {
     }
 
     /**
-     * Get results that should be passed to LLM
+     * Get results that should be passed to LLM.
+     * A tool declared CONFIDENTIAL (AIToolRegistry.outputClassification) is never included here,
+     * regardless of the plan's passToLLM flag - that classification exists specifically to keep
+     * such output away from the LLM.
      */
     getResultsForLLM(results: ToolExecutionResult[], plannedTools: PlannedToolCall[]): Record<string, unknown> {
         const llmResults: Record<string, unknown> = {};
 
         results.forEach(result => {
             const planned = plannedTools.find(t => t.sequence === result.sequence);
-            if (planned && planned.passToLLM && result.success && result.data) {
-                llmResults[result.toolName] = result.data;
-            }
+            if (!planned || !planned.passToLLM || !result.success || !result.data) return;
+            if (OUTPUT_CLASSIFICATION_BY_TOOL[result.toolName] === ToolDataClassification.CONFIDENTIAL) return;
+            llmResults[result.toolName] = result.data;
         });
 
         return llmResults;

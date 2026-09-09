@@ -156,23 +156,32 @@ describe("Budget Approval Workflow - Service Layer Unit Tests", () => {
     });
 
     describe("Critical Security: LLM Cannot Persist Directly", () => {
-        test("Service detects create_initial_budget bypass attempt", () => {
+        test("Legitimate proposal-generating tools are allowed (create_initial_budget)", () => {
             const toolContext = {
                 toolsExecuted: ["create_initial_budget"],
             };
 
             const error = approvalService.validateNoDirectPersistence(toolContext);
-            expect(error).not.toBeNull();
-            expect(error).toContain("direct");
+            expect(error).toBeNull();
         });
 
-        test("Service detects plan_next_month_budget bypass attempt", () => {
+        test("Legitimate proposal-generating tools are allowed (plan_next_month_budget)", () => {
             const toolContext = {
                 toolsExecuted: ["plan_next_month_budget"],
             };
 
             const error = approvalService.validateNoDirectPersistence(toolContext);
+            expect(error).toBeNull();
+        });
+
+        test("Service detects a direct-persistence tool bypass attempt", () => {
+            const toolContext = {
+                toolsExecuted: ["create_budget"],
+            };
+
+            const error = approvalService.validateNoDirectPersistence(toolContext);
             expect(error).not.toBeNull();
+            expect(error).toContain("direct");
         });
 
         test("Proposal-returning tools are allowed (generate_budget_proposal)", () => {

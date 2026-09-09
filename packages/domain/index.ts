@@ -490,4 +490,35 @@ export {
     type BudgetValidationResult,
 } from "./budget-approval-service";
 
+// ── Slice 5: Recommendation Domain ──────────────────────────────────────────────
+// Build, manage, and track financial recommendations
+export type {
+    RecommendationRepository,
+    RecommendationVersionRepository,
+    EvidenceRepository,
+    RecommendationService,
+} from "./recommendation-repository";
+
+export {
+    buildRecommendation,
+    isExpired,
+    shouldInvalidate,
+    isMateriallyDifferent,
+    canTransitionStatus,
+    calculateConfidenceLevel,
+    summarizeRecommendation,
+    validateRecommendationStructure,
+    type ConfidenceFactors,
+} from "./recommendation-service";
+
+// ── Slice 5: Research & Evidence ────────────────────────────────────────────
+// Retrieve, structure, and verify external facts for recommendations
+export {
+    searchResearch,
+    retrieveSource,
+    extractClaims,
+    storeEvidence,
+    checkFreshness,
+    detectConflict,
+} from "./research-evidence-service";
 

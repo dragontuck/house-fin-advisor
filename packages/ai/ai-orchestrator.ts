@@ -34,7 +34,9 @@ import {
     classifyPrivacyError,
     classifyCriticalToolFailure,
     classifyStaleSnapshot,
+    classifyDirectPersistenceAttempt,
 } from "./graceful-failure";
+import { createBudgetApprovalService } from "@house-fin/domain";
 import {
     ConversationTurn,
     resolveConversationalReference,
@@ -176,6 +178,16 @@ export class AIOrchestrator {
                 classifyCriticalToolFailure(plan.tools, toolResults) ?? classifyStaleSnapshot(toolResults);
             if (preflightFailure) {
                 return this.buildFailureResponse(request, plan, toolResults, preflightFailure, startTime);
+            }
+
+            // Step 4.6: Active guard against any tool that would directly persist financial
+            // state - proposals must always go through explicit user approval first.
+            const directPersistenceError = createBudgetApprovalService().validateNoDirectPersistence({
+                toolsExecuted: toolResults.filter((r) => r.success).map((r) => r.toolName),
+            });
+            if (directPersistenceError) {
+                console.error("[ADVISOR_DIRECT_PERSISTENCE_BLOCKED]", { correlationId: request.correlationId });
+                return this.buildFailureResponse(request, plan, toolResults, classifyDirectPersistenceAttempt(), startTime);
             }
 
             // Step 5: Extract results for LLM

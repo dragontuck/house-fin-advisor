@@ -1718,6 +1718,7 @@ export interface WorkflowState {
     status: WorkflowStatus;
     linkedFinancialSnapshotId?: EntityId;            // Snapshot this workflow is based on
     linkedSnapshotVersion?: number;                  // For reproducibility
+    version: number;                                 // Optimistic concurrency - prevents lost updates across turns
     createdAt: Date;
     updatedAt: Date;
     completedAt?: Date;
@@ -1909,3 +1910,6 @@ export * from "./ai-tools";
 
 // ── AI Audit Log Contracts ─────────────────────────────────────────────────────
 export * from "./ai-audit";
+
+// ── Slice 5: Recommendation Contracts ──────────────────────────────────────────
+export * from "./recommendation";

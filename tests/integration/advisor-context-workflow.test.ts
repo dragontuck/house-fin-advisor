@@ -62,6 +62,7 @@ describe("Advisor Context Service - Multi-Turn Workflow", () => {
                 workflowType: AdvisorWorkflow.BUDGET_REVISE,
                 planningPeriod: { year: 2026, month: 8 },
                 status: WorkflowStatus.ACTIVE,
+                version: 1,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             };
@@ -87,6 +88,7 @@ describe("Advisor Context Service - Multi-Turn Workflow", () => {
                 householdId,
                 workflowType: AdvisorWorkflow.BUDGET_REVISE,
                 status: WorkflowStatus.ACTIVE,
+                version: 1,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             };
@@ -107,6 +109,7 @@ describe("Advisor Context Service - Multi-Turn Workflow", () => {
                 householdId,
                 workflowType: AdvisorWorkflow.BUDGET_REVISE,
                 status: WorkflowStatus.ACTIVE,
+                version: 1,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             };
@@ -153,6 +156,7 @@ describe("Advisor Context Service - Multi-Turn Workflow", () => {
                     },
                 ],
                 status: WorkflowStatus.ACTIVE,
+                version: 1,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             };
@@ -181,6 +185,7 @@ describe("Advisor Context Service - Multi-Turn Workflow", () => {
                     },
                 ],
                 status: WorkflowStatus.ACTIVE,
+                version: 1,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             };
@@ -197,6 +202,7 @@ describe("Advisor Context Service - Multi-Turn Workflow", () => {
                 householdId,
                 workflowType: AdvisorWorkflow.BUDGET_REVISE,
                 status: WorkflowStatus.ACTIVE,
+                version: 1,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             };
@@ -237,6 +243,7 @@ describe("Advisor Context Service - Multi-Turn Workflow", () => {
                 ],
                 workflowType: AdvisorWorkflow.BUDGET_REVISE,
                 status: WorkflowStatus.ACTIVE,
+                version: 1,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             };
@@ -252,6 +259,7 @@ describe("Advisor Context Service - Multi-Turn Workflow", () => {
                 householdId,
                 workflowType: AdvisorWorkflow.BUDGET_REVISE,
                 status: WorkflowStatus.ACTIVE,
+                version: 1,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             };
@@ -272,6 +280,7 @@ describe("Advisor Context Service - Multi-Turn Workflow", () => {
                 workflowType: AdvisorWorkflow.BUDGET_REVISE,
                 planningPeriod: { year: 2026, month: 8 },
                 status: WorkflowStatus.ACTIVE,
+                version: 1,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             };
@@ -339,6 +348,7 @@ describe("Advisor Context Service - Multi-Turn Workflow", () => {
                 householdId,
                 workflowType: AdvisorWorkflow.BUDGET_REVISE,
                 status: WorkflowStatus.ACTIVE,
+                version: 1,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             };
@@ -372,6 +382,7 @@ describe("Advisor Context Service - Multi-Turn Workflow", () => {
                 workflowType: AdvisorWorkflow.BUDGET_REVISE,
                 planningPeriod: { year: 2026, month: 8 },
                 status: WorkflowStatus.ACTIVE,
+                version: 1,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             };
@@ -430,6 +441,7 @@ describe("Advisor Context Service - Multi-Turn Workflow", () => {
                     },
                 ],
                 status: WorkflowStatus.ACTIVE,
+                version: 1,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             };
