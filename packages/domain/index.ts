@@ -559,3 +559,12 @@ export {
     ValidatedCandidate,
     FinalRecommendation,
 } from "./recommendation-selector";
+
+// ── Slice 5: Recommendation Presentation ────────────────────────────────
+// Apply persona styling to recommendations (presentation-only, no financial changes)
+export {
+    RecommendationPresenter,
+    PresentedRecommendation,
+    presentRecommendation,
+    verifyFinancialDataUnchanged,
+} from "./recommendation-presenter";
