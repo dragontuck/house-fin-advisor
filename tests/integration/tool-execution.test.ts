@@ -312,6 +312,13 @@ jest.mock("../../apps/api/src/db/repositories", () => {
                 };
             }
         },
+        PgDecisionJournalRepository: class {
+            async recordGeneration(entry: any) { return entry; }
+            async findByRecommendationId(recommendationId: string) { return null; }
+            async findByConversationId(conversationId: string) { return []; }
+            async findRelevantByHouseholdId(householdId: string) { return []; }
+            async recordDecision(decision: any) { return decision; }
+        },
         PgCashFlowRepository: class {
             async getTransactionsForRange(hid: string, startDate: Date, endDate: Date) {
                 const allTransactions: any[] = [];
