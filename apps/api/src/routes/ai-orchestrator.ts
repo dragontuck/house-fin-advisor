@@ -106,7 +106,7 @@ export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext
                 const { conversationId } = req.params;
                 const householdId = req.context!.householdId;
                 const correlationId = req.context!.correlationId;
-                const { workflowType, financialContext } = req.body;
+                const { workflowType, financialContext, advisorPersonaKey } = req.body;
 
                 if (!workflowType) {
                     throw new OrchestratorError(
@@ -180,6 +180,7 @@ export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext
                     financialContext: financialContext || {},
                     conversationHistory,
                     priorScenarioFacts,
+                    advisorPersonaKey: typeof advisorPersonaKey === "string" ? advisorPersonaKey : undefined,
                 };
 
                 // Get orchestrator instance and process request
@@ -245,6 +246,9 @@ export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext
                         totalDurationMs: orchestratorResponse.metadata.totalDurationMs,
                         llmTokensUsed: orchestratorResponse.metadata.llmTokensUsed,
                         continuity: orchestratorResponse.metadata.continuity,
+                        research: orchestratorResponse.metadata.research,
+                        recommendation: orchestratorResponse.metadata.recommendation,
+                        advisorStyle: orchestratorResponse.metadata.advisorStyle,
                     },
                     toolResults: orchestratorResponse.toolResults.map(r => ({
                         friendlyActivity: getFriendlyActivity(r.toolName),

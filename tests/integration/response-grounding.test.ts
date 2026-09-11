@@ -86,6 +86,17 @@ describe("validateGroundedResponse", () => {
         );
     });
 
+    it("accepts a current dollar fact backed by verified research", () => {
+        const response = "The verified issuer terms show a $95 annual fee.";
+        const result = validateGroundedResponse(response, [CASH_FLOW_RESULT], [{
+            claim: "The card's current annual fee is $95.",
+            retrievalDate: new Date("2026-09-11T00:00:00.000Z"),
+        }]);
+
+        expect(result.valid).toBe(true);
+        expect(result.violations).toHaveLength(0);
+    });
+
     it("detects unsupported assumptions stated as facts", () => {
         const response = "Your income will definitely increase next year, so this purchase is safe.";
         const result = validateGroundedResponse(response, [CASH_FLOW_RESULT]);

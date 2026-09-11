@@ -20,7 +20,7 @@
  * - Observable: every step is logged
  */
 
-import { EntityId, AdvisorWorkflow, WorkflowState, AIAuditLogEntry } from "@house-fin/contracts";
+import { EntityId, AdvisorWorkflow, WorkflowState, AIAuditLogEntry, Evidence } from "@house-fin/contracts";
 import { AIToolPlanner, PlannedToolCall, ToolExecutionPlan } from "./ai-tool-planner";
 import { AIToolExecutor, ToolExecutionContext, ToolExecutionResult } from "./ai-tool-executor";
 import { LLMProvider, LLMRequest, LLMResponse, LLMProviderError } from "./llm-provider";
@@ -47,6 +47,18 @@ import {
     STALE_FINANCIAL_DATA_EXPLANATION,
 } from "./conversation-continuity";
 import { buildAuditLogEntry } from "./audit-log";
+import {
+    determineResearchRequirement,
+    performRequiredResearch,
+    RecommendationResearchProvider,
+    ResearchRequirementLevel,
+} from "./recommendation-research";
+import {
+    buildToolBackedRecommendationWorkflow,
+    isRecommendationWorkflow,
+    resolveAdvisorStyle,
+    OrchestratedRecommendationWorkflow,
+} from "./recommendation-workflow";
 
 /**
  * Request to process by orchestrator
@@ -74,6 +86,8 @@ export interface OrchestratorRequest {
     conversationHistory?: ConversationTurn[];
     /** Numeric financial facts ("*Cents" fields) from prior tool executions in this conversation. Contextual only — current data always wins. */
     priorScenarioFacts?: Record<string, number>;
+    /** Presentation-only persona key. Never used for calculations, research, or validation. */
+    advisorPersonaKey?: string;
 }
 
 /**
@@ -107,6 +121,18 @@ export interface OrchestratorResponse {
         failureCategory?: AdvisorFailureCategory;
         /** Whether the frontend should offer a [Try Again] action for this failure */
         retryable?: boolean;
+        /** Whether current external facts were needed and whether they were verified. */
+        research?: {
+            requirement: ResearchRequirementLevel;
+            status: "NOT_REQUIRED" | "VERIFIED" | "UNAVAILABLE" | "CONFLICTED";
+            evidenceCount: number;
+        };
+        recommendation?: {
+            candidateCount: number;
+            validationStatus: OrchestratedRecommendationWorkflow["validation"]["status"];
+            finalRecommendationProduced: boolean;
+        };
+        advisorStyle?: string;
         /** Conversational continuity classification for this turn */
         continuity?: {
             isFollowUp: boolean;
@@ -127,7 +153,8 @@ export class AIOrchestrator {
         private toolPlanner: AIToolPlanner,
         private toolExecutor: AIToolExecutor,
         private llmProvider: LLMProvider,
-        private privacyGateway: PrivacyGateway
+        private privacyGateway: PrivacyGateway,
+        private researchProvider?: RecommendationResearchProvider
     ) { }
 
     /**
@@ -199,11 +226,86 @@ export class AIOrchestrator {
                 toolResultsForLLM
             );
 
+            // Step 6.5: Decide whether current external facts are material. Required research
+            // must be verified before an explanation can be generated; absence is never treated
+            // as evidence that the LLM can fill in from memory.
+            const researchRequirement = determineResearchRequirement(
+                continuity.resolvedMessage,
+                request.workflowType
+            );
+            const research = await performRequiredResearch(
+                researchRequirement,
+                this.researchProvider,
+                {
+                    correlationId: request.correlationId,
+                    householdId: request.householdId,
+                    memberId: request.memberId,
+                }
+            );
+            if (researchRequirement.level === "REQUIRED" && research.status !== "VERIFIED") {
+                return this.buildFailureResponse(
+                    request,
+                    plan,
+                    toolResults,
+                    buildAdvisorFailure(AdvisorFailureCategory.RESEARCH_UNAVAILABLE),
+                    startTime,
+                    {
+                        requirement: researchRequirement.level,
+                        status: research.status,
+                        evidenceCount: 0,
+                    }
+                );
+            }
+
+            const contextWithResearch = {
+                ...financialContext,
+                research: {
+                    requirement: researchRequirement.level,
+                    reason: researchRequirement.reason,
+                    status: research.status,
+                    evidence: research.evidence.map((item) => ({
+                        claim: item.claim,
+                        sourceName: item.source.name,
+                        sourceTier: item.source.tier,
+                        sourceUrl: item.sourceUrl,
+                        retrievalDate: item.retrievalDate,
+                        freshness: item.freshness,
+                    })),
+                },
+            };
+            const recommendationWorkflow = isRecommendationWorkflow(request.workflowType, researchRequirement)
+                ? buildToolBackedRecommendationWorkflow(toolResults, researchRequirement, research)
+                : undefined;
+            if (researchRequirement.level === "REQUIRED" && !recommendationWorkflow?.finalRecommendation) {
+                return this.buildFailureResponse(
+                    request,
+                    plan,
+                    toolResults,
+                    buildAdvisorFailure(AdvisorFailureCategory.RECOMMENDATION_UNAVAILABLE),
+                    startTime,
+                    {
+                        requirement: researchRequirement.level,
+                        status: research.status,
+                        evidenceCount: research.evidence.length,
+                    }
+                );
+            }
+            const advisorStyle = resolveAdvisorStyle(request.advisorPersonaKey);
+            const recommendationContext = {
+                ...contextWithResearch,
+                recommendationWorkflow,
+                presentation: {
+                    advisorStyle: advisorStyle.label,
+                    instruction: advisorStyle.instruction,
+                    presentationOnly: true,
+                },
+            };
+
             // Step 7: Sanitize context through privacy gateway
             let sanitizedContext: Record<string, unknown>;
             try {
                 sanitizedContext = this.privacyGateway.sanitizeContextForLLM(
-                    financialContext,
+                    recommendationContext,
                     request.correlationId
                 );
             } catch {
@@ -218,7 +320,8 @@ export class AIOrchestrator {
                     request.userMessage,
                     sanitizedContext,
                     plan,
-                    request.correlationId
+                    request.correlationId,
+                    advisorStyle.instruction
                 );
             } catch (error) {
                 return this.buildFailureResponse(request, plan, toolResults, classifyLLMError(error), startTime);
@@ -236,7 +339,7 @@ export class AIOrchestrator {
 
             // Step 9: Validate response is grounded in tool results; substitute a safe,
             // deterministic fallback if the LLM said anything unsupported.
-            const validated = this.validateResponse(llmResponse, toolResults);
+            const validated = this.validateResponse(llmResponse, toolResults, research.evidence);
 
             // Step 9.5: If we reused a prior scenario, check whether the figures it relied on
             // have since changed. Current data always wins - disclose it rather than silently
@@ -281,6 +384,17 @@ export class AIOrchestrator {
                         : undefined,
                     groundingPassed: validated.groundingPassed,
                     groundingViolations: validated.violations.map(v => v.type),
+                    research: {
+                        requirement: researchRequirement.level,
+                        status: research.status,
+                        evidenceCount: research.evidence.length,
+                    },
+                    recommendation: recommendationWorkflow ? {
+                        candidateCount: recommendationWorkflow.candidates.length,
+                        validationStatus: recommendationWorkflow.validation.status,
+                        finalRecommendationProduced: recommendationWorkflow.finalRecommendation !== undefined,
+                    } : undefined,
+                    advisorStyle: advisorStyle.label,
                     auditEntry: buildAuditLogEntry({
                         request,
                         plan,
@@ -343,7 +457,8 @@ export class AIOrchestrator {
         plan: ToolExecutionPlan,
         toolResults: ToolExecutionResult[],
         failure: AdvisorFailure,
-        startTime: number
+        startTime: number,
+        research?: OrchestratorResponse["metadata"]["research"]
     ): OrchestratorResponse {
         console.warn("[ADVISOR_GRACEFUL_FAILURE]", {
             correlationId: request.correlationId,
@@ -363,6 +478,7 @@ export class AIOrchestrator {
                 totalDurationMs,
                 failureCategory: failure.category,
                 retryable: failure.retryable,
+                research,
                 auditEntry: buildAuditLogEntry({
                     request,
                     plan,
@@ -474,9 +590,10 @@ export class AIOrchestrator {
         userMessage: string,
         sanitizedContext: Record<string, unknown>,
         plan: ToolExecutionPlan,
-        correlationId: EntityId
+        correlationId: EntityId,
+        advisorStyleInstruction: string
     ): Promise<LLMResponse> {
-        const systemPrompt = this.buildSystemPrompt(plan);
+        const systemPrompt = this.buildSystemPrompt(plan, advisorStyleInstruction);
 
         const request: LLMRequest = {
             correlationId,
@@ -501,7 +618,7 @@ export class AIOrchestrator {
     /**
      * Build system prompt for the LLM
      */
-    private buildSystemPrompt(plan: ToolExecutionPlan): string {
+    private buildSystemPrompt(plan: ToolExecutionPlan, advisorStyleInstruction: string): string {
         return `You are a personal financial advisor helping households manage their finances.
 
 Your role:
@@ -514,12 +631,18 @@ Your role:
 
 Context type: ${plan.workflowType}
 Tools used: ${plan.tools.map(t => t.toolName).join(", ")}
+Advisor style: ${advisorStyleInstruction}
 
 Important constraints:
 - Do not make financial recommendations that contradict the household's existing plan
 - Always consider emergency fund adequacy
 - Account for debt obligations before suggesting new spending
 - Be conservative with affordability assessments
+- Never claim research is current unless the supplied research status is VERIFIED
+- If research is optional or not required, distinguish household calculations from general guidance
+- If recommendation validation is INSUFFICIENT_INFORMATION, clearly state that no verified recommendation can be produced and provide only limited general guidance
+- Use the advisor style only to frame the explanation; never change calculations, evidence, validation, or the final recommendation
+- Do not imply that a named person or organization provided or endorsed the advice
 - When uncertain, ask for clarification rather than guessing`;
     }
 
@@ -544,9 +667,14 @@ Please provide thoughtful financial advice based on the data above.`;
      */
     private validateResponse(
         response: LLMResponse,
-        toolResults: ToolExecutionResult[]
+        toolResults: ToolExecutionResult[],
+        verifiedResearch: Evidence[] = []
     ): { content: string; groundingPassed: boolean; violations: GroundingViolation[] } {
-        const grounding = validateGroundedResponse(response.content, toolResults);
+        const grounding = validateGroundedResponse(
+            response.content,
+            toolResults,
+            verifiedResearch.map((item) => ({ claim: item.claim, retrievalDate: item.retrievalDate }))
+        );
         if (grounding.valid) {
             return { content: response.content, groundingPassed: true, violations: [] };
         }
@@ -565,13 +693,15 @@ export function createAIOrchestrator(
     toolPlanner: AIToolPlanner,
     toolExecutor: AIToolExecutor,
     llmProvider: LLMProvider,
-    privacyGateway?: PrivacyGateway
+    privacyGateway?: PrivacyGateway,
+    researchProvider?: RecommendationResearchProvider
 ): AIOrchestrator {
     return new AIOrchestrator(
         toolPlanner,
         toolExecutor,
         llmProvider,
-        privacyGateway || getPrivacyGateway()
+        privacyGateway || getPrivacyGateway(),
+        researchProvider
     );
 }
 

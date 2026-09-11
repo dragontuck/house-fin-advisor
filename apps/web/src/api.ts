@@ -585,6 +585,17 @@ export interface OrchestrateResponse {
         workflowType: string;
         toolsExecuted: number;
         totalDurationMs: number;
+        research?: {
+            requirement: "NOT_REQUIRED" | "OPTIONAL" | "REQUIRED";
+            status: "NOT_REQUIRED" | "VERIFIED" | "UNAVAILABLE" | "CONFLICTED";
+            evidenceCount: number;
+        };
+        recommendation?: {
+            candidateCount: number;
+            validationStatus: "PASS" | "INSUFFICIENT_INFORMATION";
+            finalRecommendationProduced: boolean;
+        };
+        advisorStyle?: string;
     };
     toolResults: AdvisorToolResult[];
 }
@@ -612,11 +623,13 @@ export async function sendAdvisorMessage(conversationId: string, content: string
 
 export async function orchestrateAdvisorResponse(
     conversationId: string,
-    workflowType: string
+    workflowType: string,
+    advisorPersonaKey?: string
 ): Promise<OrchestrateResponse> {
     return apiPost<OrchestrateResponse>(`/conversations/${conversationId}/orchestrate`, {
         workflowType,
         financialContext: {},
+        advisorPersonaKey,
     });
 }
 

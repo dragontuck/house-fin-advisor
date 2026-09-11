@@ -22,6 +22,8 @@ export enum AdvisorFailureCategory {
     PRIVACY_REJECTED = "PRIVACY_REJECTED",
     STALE_SNAPSHOT = "STALE_SNAPSHOT",
     FINANCIAL_ENGINE_UNAVAILABLE = "FINANCIAL_ENGINE_UNAVAILABLE",
+    RESEARCH_UNAVAILABLE = "RESEARCH_UNAVAILABLE",
+    RECOMMENDATION_UNAVAILABLE = "RECOMMENDATION_UNAVAILABLE",
     DIRECT_PERSISTENCE_BLOCKED = "DIRECT_PERSISTENCE_BLOCKED",
 }
 
@@ -68,6 +70,14 @@ const FAILURE_COPY: Record<AdvisorFailureCategory, { message: string; retryable:
     [AdvisorFailureCategory.FINANCIAL_ENGINE_UNAVAILABLE]: {
         message: "I can't safely answer this financial question because the current calculation service is unavailable.",
         retryable: true,
+    },
+    [AdvisorFailureCategory.RESEARCH_UNAVAILABLE]: {
+        message: "This question depends on current external information that I couldn't verify. I can't produce a verified recommendation right now; please try again later.",
+        retryable: true,
+    },
+    [AdvisorFailureCategory.RECOMMENDATION_UNAVAILABLE]: {
+        message: "I gathered the available information, but I couldn't independently validate a recommendation from it. I can provide limited general guidance, but not a verified recommendation right now.",
+        retryable: false,
     },
     [AdvisorFailureCategory.DIRECT_PERSISTENCE_BLOCKED]: {
         message: "I can only propose changes - a household member has to explicitly review and approve them before anything is saved.",

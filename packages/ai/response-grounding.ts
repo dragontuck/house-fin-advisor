@@ -30,6 +30,11 @@ export interface GroundingResult {
     violations: GroundingViolation[];
 }
 
+export interface GroundingResearchEvidence {
+    claim: string;
+    retrievalDate: Date;
+}
+
 const FABRICATED_RESEARCH_PATTERNS: RegExp[] = [
     /I (?:researched|looked up|checked online|searched (?:the web|online))/i,
     /according to (?:recent |current )?(?:news|market reports|analysts|the internet)/i,
@@ -203,7 +208,11 @@ function extractMonthYearMentions(text: string): string[] {
  * Validates that an LLM response is grounded in the deterministic tool results.
  * Read-only - never mutates or "fixes" the response, only reports what's unsupported.
  */
-export function validateGroundedResponse(responseText: string, toolResults: ToolExecutionResult[]): GroundingResult {
+export function validateGroundedResponse(
+    responseText: string,
+    toolResults: ToolExecutionResult[],
+    verifiedResearch: GroundingResearchEvidence[] = []
+): GroundingResult {
     const violations: GroundingViolation[] = [];
 
     // Fabricated account/routing/card identifiers - the LLM never receives these values,
@@ -216,10 +225,12 @@ export function validateGroundedResponse(responseText: string, toolResults: Tool
     }
 
     // Fabricated research - the advisor only has access to household data, never the internet.
-    for (const pattern of FABRICATED_RESEARCH_PATTERNS) {
-        const match = responseText.match(pattern);
-        if (match) {
-            violations.push({ type: "FABRICATED_RESEARCH", detail: `Response claims external research: "${match[0]}"` });
+    if (verifiedResearch.length === 0) {
+        for (const pattern of FABRICATED_RESEARCH_PATTERNS) {
+            const match = responseText.match(pattern);
+            if (match) {
+                violations.push({ type: "FABRICATED_RESEARCH", detail: `Response claims external research: "${match[0]}"` });
+            }
         }
     }
 
@@ -233,6 +244,12 @@ export function validateGroundedResponse(responseText: string, toolResults: Tool
 
     // Unsupported numbers - every dollar figure must trace back to a tool result.
     const groundTruthAmounts = collectGroundTruthDollarAmounts(toolResults);
+    for (const evidence of verifiedResearch) {
+        for (const match of evidence.claim.matchAll(/\$\s?([\d,]+(?:\.\d{1,2})?)/g)) {
+            const amount = parseFloat(match[1].replace(/,/g, ""));
+            if (Number.isFinite(amount)) groundTruthAmounts.add(amount);
+        }
+    }
     if (groundTruthAmounts.size > 0) {
         for (const match of responseText.matchAll(/\$\s?([\d,]+(?:\.\d{1,2})?)/g)) {
             const amount = parseFloat(match[1].replace(/,/g, ""));
@@ -267,6 +284,12 @@ export function validateGroundedResponse(responseText: string, toolResults: Tool
 
     // Unsupported dates - a specific month/year mention not present anywhere in tool data.
     const groundTruthYearMonths = collectGroundTruthYearMonths(toolResults);
+    for (const evidence of verifiedResearch) {
+        const date = new Date(evidence.retrievalDate);
+        if (!Number.isNaN(date.getTime())) {
+            groundTruthYearMonths.add(`${date.getUTCFullYear()}-${date.getUTCMonth() + 1}`);
+        }
+    }
     if (groundTruthYearMonths.size > 0) {
         for (const mention of extractMonthYearMentions(responseText)) {
             if (!groundTruthYearMonths.has(mention)) {

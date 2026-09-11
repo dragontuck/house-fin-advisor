@@ -96,6 +96,7 @@ export {
     type GroundingResult,
     type GroundingViolation,
     type GroundingViolationType,
+    type GroundingResearchEvidence,
 } from "./response-grounding";
 
 export {
@@ -113,6 +114,26 @@ export {
     type ContinuityResolution,
     type StaleDataCheck,
 } from "./conversation-continuity";
+
+export {
+    determineResearchRequirement,
+    performRequiredResearch,
+    type ResearchRequirementLevel,
+    type ResearchTopic,
+    type ResearchQuery,
+    type ResearchRequirement,
+    type RecommendationResearchContext,
+    type RecommendationResearchProvider,
+    type RecommendationResearchOutcome,
+} from "./recommendation-research";
+
+export {
+    buildToolBackedRecommendationWorkflow,
+    isRecommendationWorkflow,
+    resolveAdvisorStyle,
+    type OrchestratedRecommendationWorkflow,
+    type AdvisorStyle,
+} from "./recommendation-workflow";
 
 export {
     buildAuditLogEntry,
