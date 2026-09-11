@@ -97,7 +97,23 @@ class VerifiedResearchProvider implements RecommendationResearchProvider {
 function createOrchestrator(researchProvider?: RecommendationResearchProvider) {
     const executor = new AIToolExecutor();
     executor.registerTool("get_financial_snapshot", async () => ({
-        snapshot: { id: "snapshot-1", version: 7, netWorthCents: 100000 },
+        snapshot: {
+            id: "snapshot-1",
+            householdId: "household-1",
+            asOf: new Date("2026-09-11T00:00:00.000Z"),
+            version: 7,
+            cash: 2000000,
+            debt: 0,
+            netWorth: 2000000,
+            monthlyIncome: 600000,
+            monthlyEssentialExpenses: 300000,
+            monthlyDiscretionaryExpenses: 100000,
+            monthlySurplus: 200000,
+            financialHealthStatus: "STABLE",
+            sourceAccountIds: [],
+            calculatedAt: new Date("2026-09-11T00:00:00.000Z"),
+            createdAt: new Date("2026-09-11T00:00:00.000Z"),
+        },
         recommendations: ["Keep the card."],
     }));
     const llm = new CapturingLLMProvider();
@@ -162,7 +178,7 @@ describe("research-aware recommendation orchestration", () => {
         expect(response.metadata.recommendation).toEqual({
             recommendationId: "request-1",
             candidateCount: 1,
-            validationStatus: "PASS",
+            validationStatus: "PASS_WITH_WARNINGS",
             finalRecommendationProduced: true,
         });
         expect(response.metadata.advisorStyle).toBe("Family Planning");
@@ -175,12 +191,11 @@ describe("research-aware recommendation orchestration", () => {
             financialSnapshotVersion: 7,
             householdPolicyVersion: 3,
             recommendation: {
-                deterministicRecommendation: "Keep the card.",
                 presentedRecommendation: "The verified issuer terms show a $95 annual fee. Keep the card.",
             },
             alternatives: [],
             validation: {
-                recommendationStatus: "PASS",
+                recommendationStatus: "PASS_WITH_WARNINGS",
                 groundingPassed: true,
             },
             personaUsed: {
@@ -189,6 +204,7 @@ describe("research-aware recommendation orchestration", () => {
             },
             approvalState: "PENDING",
         });
+        expect(response.decisionJournalEntry?.recommendation.deterministicRecommendation).toContain("Keep the card.");
         expect(response.decisionJournalEntry?.evidence).toHaveLength(1);
         expect(response.decisionJournalEntry?.scenarios[0]).toMatchObject({
             toolName: "get_financial_snapshot",

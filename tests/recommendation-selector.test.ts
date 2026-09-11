@@ -204,7 +204,7 @@ describe("Recommendation Selector", () => {
     });
 
     describe("Rule 2: Insufficient evidence prevents high confidence claims", () => {
-        it("should downgrade HIGH confidence to MEDIUM for INSUFFICIENT_INFORMATION", () => {
+        it("should not select a candidate with INSUFFICIENT_INFORMATION", () => {
             const candidate: ValidatedCandidate = {
                 candidate: createMockCandidate({
                     confidence: ConfidenceLevel.HIGH,
@@ -216,8 +216,7 @@ describe("Recommendation Selector", () => {
 
             const result = selectFinalRecommendation([candidate]);
 
-            expect(result).toBeDefined();
-            expect(result?.confidence).toBe(ConfidenceLevel.MEDIUM);
+            expect(result).toBeNull();
         });
 
         it("should downgrade HIGH confidence for TIER_4_MEDIA evidence only", () => {
@@ -620,7 +619,7 @@ describe("Recommendation Selector", () => {
             expect(result?.approvalRequired).toBe(true);
         });
 
-        it("should require approval for INSUFFICIENT_INFORMATION", () => {
+        it("should not release INSUFFICIENT_INFORMATION for approval", () => {
             const candidate: ValidatedCandidate = {
                 candidate: createMockCandidate(),
                 validation: createMockValidation({
@@ -630,7 +629,7 @@ describe("Recommendation Selector", () => {
 
             const result = selectFinalRecommendation([candidate]);
 
-            expect(result?.approvalRequired).toBe(true);
+            expect(result).toBeNull();
         });
 
         it("should require approval for high-impact challenges", () => {

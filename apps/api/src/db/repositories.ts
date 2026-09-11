@@ -1903,3 +1903,5 @@ export { PgAIAuditLogRepository, createAIAuditLogRepository } from "./repositori
 
 // Re-export household-private decision journal repository
 export { PgDecisionJournalRepository } from "./repositories/decision-journal";
+export { PgEvidenceRepository } from "./repositories/evidence";
+export { PgRecommendationRepository, PgRecommendationVersionRepository } from "./repositories/recommendation";

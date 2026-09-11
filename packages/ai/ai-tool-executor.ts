@@ -40,6 +40,8 @@ export interface ToolExecutionResult {
     success: boolean;
     /** Tool's output data */
     data?: Record<string, unknown>;
+    /** Exact typed input used for this execution, retained for deterministic replay. */
+    parameters: Record<string, unknown>;
     /** Error message if failed */
     error?: string;
     /** Time taken in milliseconds */
@@ -157,6 +159,7 @@ export class AIToolExecutor {
                 sequence: plannedTool.sequence,
                 toolName: plannedTool.toolName,
                 success: false,
+                parameters: { ...params },
                 error: `Authorization failed: ${authCheck.reason}`,
                 durationMs: Date.now() - startTime,
                 retries: 0,
@@ -179,6 +182,7 @@ export class AIToolExecutor {
                     sequence: plannedTool.sequence,
                     toolName: plannedTool.toolName,
                     success: true,
+                    parameters: { ...params },
                     data: result,
                     durationMs: Date.now() - startTime,
                     retries,
@@ -210,6 +214,7 @@ export class AIToolExecutor {
             sequence: plannedTool.sequence,
             toolName: plannedTool.toolName,
             success: false,
+            parameters: { ...params },
             error: lastError?.message || "Unknown error",
             durationMs: Date.now() - startTime,
             retries,
@@ -242,11 +247,13 @@ export class AIToolExecutor {
                 });
 
                 if (!dependenciesMet) {
+                    const parameters = toolParams.get(plannedTool.toolName) || { householdId: context.householdId };
                     // Skip this tool if its dependencies failed
                     const skipped: ToolExecutionResult = {
                         sequence: plannedTool.sequence,
                         toolName: plannedTool.toolName,
                         success: false,
+                        parameters: { ...parameters },
                         error: "Dependencies not met",
                         durationMs: 0,
                         retries: 0,

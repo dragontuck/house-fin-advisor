@@ -25,6 +25,7 @@ import {
 import {
     BudgetService,
     CashFlowService,
+    calculatePurchaseScenario,
     createBudgetService,
     createCashFlowService,
 } from "@house-fin/domain";
@@ -39,7 +40,7 @@ import {
     VarianceTrend,
 } from "@house-fin/contracts";
 
-/** Household emergency fund floor used by simulate_purchase (months of essential expenses). */
+/** Household policy input used by the purchase scenario domain service. */
 const EMERGENCY_FUND_MINIMUM_MONTHS = 3;
 
 /**
@@ -117,53 +118,18 @@ export async function simulatePurchase(
         const currentLiquidCashCents = (snapshot?.cash ?? 0) as Money;
         const essentialExpensesCents = (settings?.monthlyEssentialExpenses ?? snapshot?.monthlyEssentialExpenses ?? 0) as Money;
         const monthlySurplusCents = (snapshot?.monthlySurplus ?? 0) as Money;
-        const emergencyFundFloorCents = (essentialExpensesCents * EMERGENCY_FUND_MINIMUM_MONTHS) as Money;
 
-        const paysFromCash = paymentMethod === "CASH" || paymentMethod === "SAVINGS";
-        const projectedLiquidCashCents = (paysFromCash
-            ? currentLiquidCashCents - purchaseAmountCents
-            : currentLiquidCashCents) as Money;
-
-        // Financed purchases are assumed amortized over 12 months for surplus impact
-        const estimatedMonthlyPaymentCents = paymentMethod === "CASH" || paymentMethod === "SAVINGS"
-            ? 0
-            : Math.ceil(purchaseAmountCents / 12);
-
-        const keepsEmergencyFundIntact = !paysFromCash || projectedLiquidCashCents >= emergencyFundFloorCents;
-        const keepsSurplusPositive = monthlySurplusCents - estimatedMonthlyPaymentCents >= 0;
-        const isAffordable = keepsEmergencyFundIntact && keepsSurplusPositive;
-
-        const recommendations: string[] = [];
-        if (!keepsEmergencyFundIntact) {
-            recommendations.push(
-                `Paying in cash would drop liquid savings below your ${EMERGENCY_FUND_MINIMUM_MONTHS}-month emergency fund floor.`
-            );
-        }
-        if (!keepsSurplusPositive) {
-            recommendations.push("Estimated monthly payment would exceed your current monthly surplus.");
-        }
-        if (isAffordable) {
-            recommendations.push("This purchase fits within your current cash position and emergency fund floor.");
-        }
-
-        return {
+        return calculatePurchaseScenario({
             householdId,
-            scenario: {
-                purchaseAmountCents,
-                paymentMethod,
-                description,
-            },
-            projectedImpact: {
-                currentLiquidCashCents,
-                projectedLiquidCashCents,
-                affectsCashPosition: paysFromCash,
-                affectsDebtLevel: paymentMethod === "CREDIT_CARD" || paymentMethod === "LOAN",
-                affectsEmergencyFund: paysFromCash,
-                budgetImpactCategory: options?.category,
-            },
-            recommendations,
-            isAffordable,
-        };
+            purchaseAmountCents,
+            paymentMethod,
+            description,
+            currentLiquidCashCents,
+            monthlyEssentialExpensesCents: essentialExpensesCents,
+            monthlySurplusCents,
+            emergencyFundMinimumMonths: EMERGENCY_FUND_MINIMUM_MONTHS,
+            category: options?.category,
+        });
     } catch (error) {
         return {
             householdId,

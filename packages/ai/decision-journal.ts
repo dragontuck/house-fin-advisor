@@ -87,18 +87,22 @@ export function buildDecisionJournalEntry(input: BuildDecisionJournalEntryInput)
         financialSnapshotId: snapshot.id,
         financialSnapshotVersion: snapshot.version,
         householdPolicyVersion: extractPolicyVersion(input.request),
-        scenarios: input.toolResults.map((result) => ({
-            toolName: result.toolName,
-            success: result.success,
-            result: result.success ? clone(result.data) : undefined,
-            error: result.error,
+        scenarios: input.workflow.scenarioConstruction.scenarios.map((scenario) => ({
+            toolName: input.workflow.scenarioConstruction.sourceTools.join(","),
+            parameters: Object.fromEntries(
+                input.toolResults.map((result) => [result.toolName, clone(result.parameters)])
+            ),
+            success: true,
+            result: clone(scenario) as unknown as Record<string, unknown>,
         })),
         evidence: clone(input.evidence),
         recommendation: {
-            deterministicRecommendation: finalRecommendation,
+            deterministicRecommendation: finalRecommendation.recommendedAction,
             presentedRecommendation: input.presentedRecommendation,
         },
-        alternatives: input.workflow.candidates.filter((candidate) => candidate !== finalRecommendation),
+        alternatives: finalRecommendation.alternatives
+            .filter((alternative) => !alternative.isPreferred)
+            .map((alternative) => alternative.title),
         validation: {
             recommendationStatus: input.workflow.validation.status,
             recommendationSummary: input.workflow.validation.summary,
@@ -106,8 +110,8 @@ export function buildDecisionJournalEntry(input: BuildDecisionJournalEntryInput)
             groundingViolations: input.groundingViolations,
         },
         confidence: {
-            level: "NOT_ASSESSED",
-            reasoning: "This workflow did not calculate a deterministic recommendation confidence score.",
+            level: finalRecommendation.confidence,
+            reasoning: finalRecommendation.confidenceReasoning,
         },
         personaUsed: {
             key: input.advisorStyle.key,

@@ -83,7 +83,7 @@ function getFriendlyActivity(toolName: string): string {
  * Register orchestrator routes
  */
 export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext) => {
-    const { app, advisorService, conversationRepo, aiAuditLogRepo, decisionJournalRepo } = context;
+    const { app, advisorService, conversationRepo, aiAuditLogRepo, decisionJournalRepo, recommendationRepo } = context;
 
     /**
      * POST /conversations/:conversationId/orchestrate
@@ -204,6 +204,27 @@ export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext
                 // A generated recommendation is not delivered unless its exact historical
                 // context has first been persisted. This prevents later reconstruction from live data.
                 if (orchestratorResponse.decisionJournalEntry) {
+                    if (
+                        !recommendationRepo ||
+                        !orchestratorResponse.recommendation ||
+                        !orchestratorResponse.decisionJournalEntry.financialSnapshotId ||
+                        orchestratorResponse.decisionJournalEntry.householdPolicyVersion === undefined
+                    ) {
+                        throw new OrchestratorError(
+                            503,
+                            "The recommendation could not be saved, so it was not released.",
+                            "RECOMMENDATION_PERSISTENCE_UNAVAILABLE"
+                        );
+                    }
+                    await recommendationRepo.invalidateForChangedBasis(
+                        householdId,
+                        orchestratorResponse.decisionJournalEntry.financialSnapshotId,
+                        orchestratorResponse.decisionJournalEntry.householdPolicyVersion
+                    );
+                    await recommendationRepo.recordGenerated(
+                        orchestratorResponse.decisionJournalEntry,
+                        orchestratorResponse.recommendation
+                    );
                     await decisionJournalRepo.recordGeneration(orchestratorResponse.decisionJournalEntry);
                 }
 
@@ -243,7 +264,7 @@ export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext
                             conversationId as EntityId,
                             assistantMessage.id,
                             toolResult.toolName,
-                            {}, // params would come from orchestrator
+                            toolResult.parameters,
                             toolResult.data,
                             undefined,
                             toolResult.durationMs,
@@ -260,6 +281,7 @@ export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext
                     success: orchestratorResponse.success,
                     failureCategory: orchestratorResponse.metadata.failureCategory,
                     retryable: orchestratorResponse.metadata.retryable ?? false,
+                    recommendation: orchestratorResponse.recommendation,
                     metadata: {
                         workflowType: orchestratorResponse.metadata.workflowType,
                         toolsExecuted: orchestratorResponse.metadata.toolsExecuted,

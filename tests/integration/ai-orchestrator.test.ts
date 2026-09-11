@@ -474,9 +474,21 @@ describe("AI Orchestrator - End-to-End", () => {
         // Register all mock tools
         executor.registerTool("get_financial_snapshot", async () => ({
             snapshot: {
-                netWorthCents: 100000,
-                cashCents: 5000,
-                debtCents: 25000,
+                id: "snapshot-1",
+                householdId: "hh-123",
+                asOf: new Date("2026-09-11T00:00:00.000Z"),
+                version: 1,
+                cash: 2000000,
+                debt: 250000,
+                netWorth: 1750000,
+                monthlyIncome: 500000,
+                monthlyEssentialExpenses: 250000,
+                monthlyDiscretionaryExpenses: 100000,
+                monthlySurplus: 150000,
+                financialHealthStatus: "STABLE",
+                sourceAccountIds: [],
+                calculatedAt: new Date("2026-09-11T00:00:00.000Z"),
+                createdAt: new Date("2026-09-11T00:00:00.000Z"),
             },
         }));
 
@@ -520,6 +532,7 @@ describe("AI Orchestrator - End-to-End", () => {
 
         executor.registerTool("create_initial_budget", async () => ({
             proposedBudgets: [],
+            recommendations: ["Adopt the proposed initial budget."],
         }));
     });
 

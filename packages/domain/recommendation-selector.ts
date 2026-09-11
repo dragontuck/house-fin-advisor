@@ -54,6 +54,10 @@ interface CandidateRankingScore {
  * Final recommendation output
  */
 export interface FinalRecommendation {
+    type: RecommendationCandidate["type"];
+    title: string;
+    scenarioIds: EntityId[];
+    policyVersion: number;
     recommendedAction: string;
     why: string; // Summary of why this was selected
     alternatives: RecommendationAlternative[];
@@ -89,9 +93,9 @@ export function selectFinalRecommendation(
         return null;
     }
 
-    // RULE 1: Filter out failed candidates
+    // RULE 1: Only candidates that passed independent validation are deliverable.
     const eligibleCandidates = candidates.filter(
-        (c) => c.validation.status !== "FAIL"
+        (c) => c.validation.status === "PASS" || c.validation.status === "PASS_WITH_WARNINGS"
     );
 
     if (eligibleCandidates.length === 0) {
@@ -121,6 +125,10 @@ export function selectFinalRecommendation(
 
     // Build final recommendation
     const final: FinalRecommendation = {
+        type: selected.candidate.type,
+        title: selected.candidate.title,
+        scenarioIds: selected.candidate.scenarioIds,
+        policyVersion: selected.candidate.policyVersion,
         recommendedAction: selected.candidate.recommendedAction,
         why: buildSelectionReasoning(selected, scored),
         alternatives: selected.candidate.alternatives,

@@ -125,7 +125,15 @@ export {
     type RecommendationResearchContext,
     type RecommendationResearchProvider,
     type RecommendationResearchOutcome,
+    researchClaimRelevance,
 } from "./recommendation-research";
+
+export {
+    CachedEvidenceResearchProvider,
+    defaultControlledResearchConfig,
+    type AllowlistedResearchSource,
+    type ControlledResearchConfig,
+} from "./production-research-provider";
 
 export {
     buildToolBackedRecommendationWorkflow,

@@ -70,6 +70,8 @@ import {
     planNextMonthBudget,
     simulateBudgetChange,
     simulatePurchase,
+    CachedEvidenceResearchProvider,
+    defaultControlledResearchConfig,
     type ToolDependencies,
 } from "@house-fin/ai";
 import {
@@ -96,6 +98,9 @@ import {
     PgToolExecutionRepository,
     PgAIAuditLogRepository,
     PgDecisionJournalRepository,
+    PgEvidenceRepository,
+    PgRecommendationRepository,
+    PgRecommendationVersionRepository,
 } from "./db/repositories";
 import { householdContextMiddleware, verifyHouseholdContext } from "./middleware/household-context";
 import { uploadRateLimiter } from "./middleware/rate-limit";
@@ -108,6 +113,7 @@ import { registerOrchestratorRoutes } from "./routes/ai-orchestrator";
 import { registerToolExecutionRoutes } from "./routes/tool-execution";
 import { registerAIAuditRoutes } from "./routes/ai-audit";
 import { registerDecisionJournalRoutes } from "./routes/decision-journal";
+import { registerRecommendationRoutes } from "./routes/recommendations";
 
 /**
  * Error with context
@@ -197,6 +203,9 @@ export function createServer(): Express {
     const toolExecutionRepo = new PgToolExecutionRepository();
     const aiAuditLogRepo = new PgAIAuditLogRepository();
     const decisionJournalRepo = new PgDecisionJournalRepository();
+    const evidenceRepo = new PgEvidenceRepository();
+    const recommendationRepo = new PgRecommendationRepository();
+    const recommendationVersionRepo = new PgRecommendationVersionRepository();
 
     const budgetRepo = new PgBudgetRepository();
     const budgetService = createBudgetService();
@@ -779,7 +788,8 @@ export function createServer(): Express {
         toolPlanner,
         toolExecutor,
         llmProvider,
-        privacyGateway
+        privacyGateway,
+        new CachedEvidenceResearchProvider(evidenceRepo, defaultControlledResearchConfig())
     );
 
     // Initialize the singleton
@@ -2857,6 +2867,8 @@ export function createServer(): Express {
         toolExecutionRepo,
         aiAuditLogRepo,
         decisionJournalRepo,
+        recommendationRepo,
+        recommendationVersionRepo,
         storageAdapter,
     };
 
@@ -2864,6 +2876,7 @@ export function createServer(): Express {
     registerAdvisorConversationRoutes(approvalRouteContext);
     registerOrchestratorRoutes(approvalRouteContext);
     registerDecisionJournalRoutes(approvalRouteContext);
+    registerRecommendationRoutes(approvalRouteContext);
     registerToolExecutionRoutes(approvalRouteContext);
     registerAIAuditRoutes(approvalRouteContext);
 

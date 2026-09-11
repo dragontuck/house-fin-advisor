@@ -496,9 +496,17 @@ function buildCandidateFromScenario(
     summary: string,
     isPreferred: boolean
 ): RecommendationCandidate {
+    const stableId = (prefix: string, value: string): string => {
+        let hash = 2166136261;
+        for (const character of value) {
+            hash ^= character.charCodeAt(0);
+            hash = Math.imul(hash, 16777619);
+        }
+        return `${prefix}-${(hash >>> 0).toString(36)}`;
+    };
     // Extract assumptions from scenario
     const assumptions: RecommendationAssumption[] = scenario.assumptions.map((sa) => ({
-        id: `assumption-${Math.random().toString(36).substr(2, 9)}`,
+        id: stableId("assumption", `${scenario.id}:${sa.key}`),
         key: sa.key,
         value: sa.statement,
         confidence: sa.confidence,
@@ -520,7 +528,7 @@ function buildCandidateFromScenario(
     if (scenario.sensitivities && scenario.sensitivities.length > 0) {
         scenario.sensitivities.forEach((sens) => {
             risks.push({
-                id: `risk-${Math.random().toString(36).substr(2, 9)}`,
+                id: stableId("risk", `${scenario.id}:${sens.assumptionKey}`),
                 description: `Sensitivity to ${sens.assumptionKey} changes`,
                 severity: "MEDIUM",
                 likelihood: "POSSIBLE",
@@ -546,7 +554,7 @@ function buildCandidateFromScenario(
         // Match evidence to scenario type or topic
         if (isEvidenceRelevant(ev.claim, scenario)) {
             evidence.push({
-                id: `evidence-${Math.random().toString(36).substr(2, 9)}`,
+                id: stableId("evidence", `${scenario.id}:${ev.id}`),
                 evidenceId: ev.id,
                 claim: ev.claim,
                 sourceName: ev.source.name,
@@ -576,7 +584,7 @@ function buildCandidateFromScenario(
     // Build alternatives from other scenarios of same type
     const alternatives: RecommendationAlternative[] = [
         {
-            id: `alt-${Math.random().toString(36).substr(2, 9)}`,
+            id: stableId("alt", `${scenario.id}:${title}`),
             title,
             description: summary,
             rationale: scenario.rationale || "Based on financial analysis",
@@ -590,7 +598,7 @@ function buildCandidateFromScenario(
     const { complies, violations } = checkPolicyCompliance(input, scenario);
 
     return {
-        id: `candidate-${Math.random().toString(36).substr(2, 9)}`,
+        id: stableId("candidate", `${scenario.id}:${type}:${title}`),
         type,
         title,
         summary,
@@ -687,7 +695,7 @@ function isEvidenceRelevant(claim: string, scenario: Scenario): boolean {
                 ? ["interest rate", "debt", "APR", "minimum payment", "credit"]
                 : scenario.type === ScenarioType.AFFORDABILITY
                     ? ["debt-to-income", "credit", "loan", "affordability", "approval"]
-                    : ["retirement", "savings", "investment", "income"];
+                    : ["retirement", "savings", "investment", "income", "card", "annual fee", "issuer", "tax", "rate"];
 
     const lowerClaim = claim.toLowerCase();
     return scenarioKeywords.some((keyword) => lowerClaim.includes(keyword));

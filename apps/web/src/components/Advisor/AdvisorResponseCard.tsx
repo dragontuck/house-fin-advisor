@@ -6,7 +6,7 @@
  */
 import { useState } from "react";
 import { formatCents } from "../../api";
-import type { AdvisorToolResult, AdvisorUxMode } from "../../api";
+import type { AdvisorToolResult, AdvisorUxMode, StructuredRecommendation } from "../../api";
 import { createBudgetProposal, approveBudgetProposal } from "../../api";
 import {
     splitHeadline,
@@ -24,6 +24,7 @@ interface Props {
     assistantMessage: string;
     toolResults: AdvisorToolResult[];
     conversationId: string;
+    recommendation?: StructuredRecommendation;
 }
 
 function FactGrid({ facts }: { facts: Fact[] }) {
@@ -46,68 +47,23 @@ function EvidenceSection({ toolResults }: { toolResults: AdvisorToolResult[] }) 
     return <FactGrid facts={facts} />;
 }
 
-function buildValidation(toolResults: AdvisorToolResult[]): RecommendationExperienceModel["validation"] {
-    const failedResults = toolResults.filter((result) => !result.success);
+function toExperienceModel(recommendation: StructuredRecommendation): RecommendationExperienceModel {
     return {
-        status: failedResults.length === 0 ? "PASS" : "PASS_WITH_WARNINGS",
-        summary: failedResults.length === 0
-            ? "The supporting financial tools completed successfully."
-            : "Some supporting information could not be verified.",
-        details: toolResults.map((result) => ({
-            category: "FINANCIAL DATA",
-            status: result.success ? "PASS" : "WARN",
-            description: result.success ? result.friendlyActivity : (result.error ?? "Source unavailable"),
-        })),
+        action: recommendation.recommendedAction,
+        why: recommendation.why,
+        financialImpact: {
+            cash: formatCents(recommendation.impact.cashFlowImpact),
+            debt: formatCents(recommendation.impact.debtReduction),
+            financialIndependence: formatCents(recommendation.impact.wealthIncrease),
+        },
+        alternatives: recommendation.alternatives,
+        assumptions: recommendation.assumptions,
+        risks: recommendation.risks,
+        evidence: recommendation.evidence,
+        validation: recommendation.validation,
+        confidence: recommendation.confidence,
+        confidenceReasoning: recommendation.confidenceReasoning,
     };
-}
-
-function buildScenarioImpact(toolResults: AdvisorToolResult[]): RecommendationExperienceModel["financialImpact"] {
-    const impact: RecommendationExperienceModel["financialImpact"] = {};
-    const facts = toolResults.flatMap((result) => extractFacts(result.data));
-
-    for (const fact of facts) {
-        const label = fact.label.toLowerCase();
-        if (!impact.cash && /(cash|surplus|liquidity)/.test(label)) impact.cash = fact.value;
-        if (!impact.budget && /(budget|expense|spending)/.test(label)) impact.budget = fact.value;
-        if (!impact.goals && /(goal|saving|investment)/.test(label)) impact.goals = fact.value;
-        if (!impact.debt && /(debt|payment|interest)/.test(label)) impact.debt = fact.value;
-        if (!impact.emergencyFund && /emergency/.test(label)) impact.emergencyFund = fact.value;
-        if (!impact.financialIndependence && /(retirement|independence)/.test(label)) {
-            impact.financialIndependence = fact.value;
-        }
-    }
-
-    return impact;
-}
-
-function extractRecommendationEvidence(
-    toolResults: AdvisorToolResult[]
-): RecommendationExperienceModel["evidence"] {
-    return toolResults.flatMap((result) => {
-        const evidence = result.data?.evidence;
-        if (!Array.isArray(evidence)) return [];
-
-        return evidence.flatMap((item) => {
-            if (!item || typeof item !== "object") return [];
-            const record = item as Record<string, unknown>;
-            if (
-                typeof record.claim !== "string" ||
-                typeof record.sourceName !== "string" ||
-                typeof record.retrievalDate !== "string"
-            ) return [];
-
-            const sourceUrl = typeof record.sourceUrl === "string" && /^https?:\/\//i.test(record.sourceUrl)
-                ? record.sourceUrl
-                : undefined;
-
-            return [{
-                claim: record.claim,
-                sourceName: record.sourceName,
-                sourceUrl,
-                retrievalDate: record.retrievalDate,
-            }];
-        });
-    });
 }
 
 function InformationResponse({ assistantMessage, toolResults }: Props) {
@@ -157,42 +113,10 @@ function DiagnosisResponse({ assistantMessage, toolResults }: Props) {
     );
 }
 
-function PlanningResponse({ assistantMessage, toolResults, conversationId }: Props) {
+function PlanningResponse({ assistantMessage, toolResults, conversationId, recommendation }: Props) {
     const plan = extractProposedPlan(toolResults);
-    const recommendations = extractRecommendations(toolResults);
-    const { headline, rest } = splitHeadline(assistantMessage);
     const [status, setStatus] = useState<"idle" | "reviewing" | "approving" | "approved" | "error">("idle");
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const recommendation: RecommendationExperienceModel = {
-        action: headline,
-        why: rest || "This plan uses your current budget and recent household data.",
-        financialImpact: {
-            ...(plan.projectedSurplusCents !== undefined
-                ? { cash: `${formatCents(plan.projectedSurplusCents)} projected monthly surplus` }
-                : {}),
-            ...(plan.totalCents !== undefined
-                ? { budget: `${formatCents(plan.totalCents)} total monthly budget` }
-                : {}),
-        },
-        alternatives: recommendations.map((item, index) => ({
-            title: `Alternative ${index + 1}`,
-            rationale: item,
-        })),
-        assumptions: [{
-            value: "Income and expenses remain close to the most recent household data.",
-            sensitivity: "A material income or spending change could change the proposed amounts.",
-        }],
-        risks: [{
-            description: "Actual spending may differ from the proposed budget.",
-            severity: "MEDIUM",
-            impact: "A lower surplus would reduce the amount available for goals or debt.",
-        }],
-        evidence: extractRecommendationEvidence(toolResults),
-        validation: buildValidation(toolResults),
-        confidence: toolResults.every((result) => result.success) ? "MEDIUM" : "LOW",
-        confidenceReasoning: "Confidence reflects the availability of current household data and successful financial checks.",
-    };
-
     const handleApprove = async () => {
         setStatus("approving");
         setErrorMessage(null);
@@ -219,7 +143,9 @@ function PlanningResponse({ assistantMessage, toolResults, conversationId }: Pro
 
     return (
         <div className="advisor-card">
-            <RecommendationExperience recommendation={recommendation} />
+            {recommendation
+                ? <RecommendationExperience recommendation={toExperienceModel(recommendation)} />
+                : <p className="advisor-answer">{assistantMessage}</p>}
 
             {plan.changes.length > 0 && (
                 <div className="advisor-section-block">
@@ -270,34 +196,12 @@ function PlanningResponse({ assistantMessage, toolResults, conversationId }: Pro
     );
 }
 
-function ScenarioResponse({ assistantMessage, toolResults }: Props) {
-    const { headline, rest } = splitHeadline(assistantMessage);
-    const recommendations = extractRecommendations(toolResults);
-    const recommendation: RecommendationExperienceModel = {
-        action: headline,
-        why: rest || "This option best fits the scenario and the household data available.",
-        financialImpact: buildScenarioImpact(toolResults),
-        alternatives: recommendations.map((item, index) => ({
-            title: `Alternative ${index + 1}`,
-            rationale: item,
-        })),
-        assumptions: [{
-            value: "Current balances, income, expenses, and household settings remain unchanged.",
-            sensitivity: "Changes to those inputs may change the result.",
-        }],
-        risks: [{
-            description: "Unexpected expenses could reduce the cash available for this option.",
-            severity: "MEDIUM",
-            impact: "The timing or amount may need to be adjusted.",
-        }],
-        evidence: extractRecommendationEvidence(toolResults),
-        validation: buildValidation(toolResults),
-        confidence: toolResults.every((result) => result.success) ? "MEDIUM" : "LOW",
-        confidenceReasoning: "Confidence reflects the completeness of the scenario inputs and financial checks.",
-    };
+function ScenarioResponse({ assistantMessage, recommendation }: Props) {
     return (
         <div className="advisor-card">
-            <RecommendationExperience recommendation={recommendation} />
+            {recommendation
+                ? <RecommendationExperience recommendation={toExperienceModel(recommendation)} />
+                : <p className="advisor-answer">{assistantMessage}</p>}
         </div>
     );
 }

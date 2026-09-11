@@ -30,6 +30,23 @@ export interface RecommendationResearchOutcome {
     evidence: Evidence[];
 }
 
+const RELEVANCE_STOP_WORDS = new Set([
+    "a", "an", "and", "applicable", "current", "for", "of", "or", "the", "to", "under",
+]);
+
+export function researchClaimRelevance(expectedClaim: string, evidenceClaim: string): number {
+    const tokens = (value: string) => new Set(
+        value.toLowerCase().match(/[a-z0-9]+/g)
+            ?.filter((token) => token.length > 2 && !RELEVANCE_STOP_WORDS.has(token))
+            .map((token) => token.length > 3 && token.endsWith("s") ? token.slice(0, -1) : token) ?? []
+    );
+    const expected = tokens(expectedClaim);
+    const actual = tokens(evidenceClaim);
+    if (expected.size === 0 || actual.size === 0) return 0;
+    const overlap = [...expected].filter((token) => actual.has(token)).length;
+    return Math.round((overlap / expected.size) * 100);
+}
+
 export async function performRequiredResearch(
     requirement: ResearchRequirement,
     provider: RecommendationResearchProvider | undefined,
@@ -55,8 +72,13 @@ export async function performRequiredResearch(
             const response = responses[index];
             const query = requirement.queries[index];
             const qualifyingEvidence = response.results
+                .filter((result) =>
+                    result.relevanceScore >= 30 &&
+                    researchClaimRelevance(query.claim, result.evidence.claim) >= 20
+                )
                 .map((result) => result.evidence)
                 .filter((item) =>
+                    item.householdId === context.householdId &&
                     item.verificationStatus === "VERIFIED" &&
                     item.freshness !== "STALE" &&
                     item.freshness !== "EXPIRED" &&
@@ -76,11 +98,11 @@ export async function performRequiredResearch(
 
 const CURRENT_FACT_PATTERN = /\b(current|currently|latest|today|this year|now|new)\b/i;
 const TAX_PATTERN = /\b(tax|taxes|taxable|deduction|deductible|irs|withholding)\b/i;
-const CARD_PATTERN = /\b(credit card|card)\b/i;
+const CARD_PATTERN = /\b(credit card|card|amex|american express|visa|mastercard|discover|capital one|chase|citi)\b/i;
 const CARD_DECISION_PATTERN = /\b(keep|cancel|close|renew|worth|annual fee|reward|rewards|benefit|benefits|points|issuer|terms)\b/i;
 const RETIREMENT_PATTERN = /\b(retirement|401\(?k\)?|403\(?b\)?|ira|roth|pension)\b/i;
 const RETIREMENT_RULE_PATTERN = /\b(limit|limits|match|matching|rule|rules|eligibility|vesting|tax|deduction|contribution maximum)\b/i;
-const RATE_PATTERN = /\b(rate|rates|apy|apr|yield)\b/i;
+const RATE_PATTERN = /\b(rate|rates|apy|apr|yield|interest|fee|fees|terms)\b/i;
 
 export function determineResearchRequirement(
     userMessage: string,

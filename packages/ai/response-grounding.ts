@@ -33,6 +33,8 @@ export interface GroundingResult {
 export interface GroundingResearchEvidence {
     claim: string;
     retrievalDate: Date;
+    sourceName?: string;
+    sourceUrl?: string;
 }
 
 const FABRICATED_RESEARCH_PATTERNS: RegExp[] = [
@@ -41,6 +43,8 @@ const FABRICATED_RESEARCH_PATTERNS: RegExp[] = [
     /based on (?:current |today's )?(?:interest rates|mortgage rates|market data) (?:from|published|reported)/i,
     /I (?:found|read) (?:this )?(?:on|from) the (?:web|internet)/i,
 ];
+
+const NAMED_SOURCE_PATTERN = /\b(?:according to|reported by|published by|from)\s+([A-Z][A-Za-z0-9&.' -]{1,50})/g;
 
 const UNSUPPORTED_ASSUMPTION_PATTERNS: RegExp[] = [
     /will (?:definitely|certainly|surely) (?:increase|decrease|go up|go down|happen)/i,
@@ -224,13 +228,30 @@ export function validateGroundedResponse(
         }
     }
 
-    // Fabricated research - the advisor only has access to household data, never the internet.
-    if (verifiedResearch.length === 0) {
-        for (const pattern of FABRICATED_RESEARCH_PATTERNS) {
-            const match = responseText.match(pattern);
-            if (match) {
-                violations.push({ type: "FABRICATED_RESEARCH", detail: `Response claims external research: "${match[0]}"` });
+    // Generic claims of browsing are never valid; research is supplied as typed evidence.
+    for (const pattern of FABRICATED_RESEARCH_PATTERNS) {
+        const match = responseText.match(pattern);
+        if (match) {
+            violations.push({ type: "FABRICATED_RESEARCH", detail: `Response claims unsupported research activity: "${match[0]}"` });
+        }
+    }
+
+    const verifiedSourceNames = new Set(
+        verifiedResearch.flatMap((item) => {
+            const names = item.sourceName ? [item.sourceName.toLowerCase()] : [];
+            if (item.sourceUrl) {
+                try { names.push(new URL(item.sourceUrl).hostname.toLowerCase()); } catch { /* invalid evidence URL is not trusted */ }
             }
+            return names;
+        })
+    );
+    for (const match of responseText.matchAll(NAMED_SOURCE_PATTERN)) {
+        const attributed = match[1].trim().replace(/[.,;:]$/, "").toLowerCase();
+        if (![...verifiedSourceNames].some((source) => source.includes(attributed) || attributed.includes(source))) {
+            violations.push({
+                type: "FABRICATED_RESEARCH",
+                detail: `Response attributes research to an unverified source: "${match[1].trim()}"`,
+            });
         }
     }
 

@@ -533,6 +533,11 @@ export {
     generateFinancialIndependenceScenarios,
 } from "./scenario-service";
 
+export {
+    calculatePurchaseScenario,
+    type PurchaseScenarioInput,
+} from "./purchase-scenario-service";
+
 // ── Slice 5: Candidate Recommendation Generation ─────────────────────────────
 // Generate candidate recommendations from scenarios and policy
 export {

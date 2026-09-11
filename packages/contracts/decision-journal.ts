@@ -5,13 +5,14 @@ export type DecisionJournalApprovalState = "PENDING" | "APPROVED" | "DECLINED";
 
 export interface DecisionJournalScenario {
     toolName: string;
+    parameters: Record<string, unknown>;
     success: boolean;
     result?: Record<string, unknown>;
     error?: string;
 }
 
 export interface DecisionJournalValidation {
-    recommendationStatus: "PASS" | "INSUFFICIENT_INFORMATION";
+    recommendationStatus: "PASS" | "PASS_WITH_WARNINGS" | "FAIL" | "INSUFFICIENT_INFORMATION";
     recommendationSummary: string;
     groundingPassed: boolean;
     groundingViolations: string[];

@@ -21,6 +21,7 @@
  */
 
 import { EntityId, AdvisorWorkflow, AIAuditLogEntry, DecisionJournalEntry, DecisionJournalRecord, Evidence } from "@house-fin/contracts";
+import type { FinalRecommendation } from "@house-fin/domain";
 import { AIToolPlanner, ToolExecutionPlan } from "./ai-tool-planner";
 import { AIToolExecutor, ToolExecutionContext, ToolExecutionResult } from "./ai-tool-executor";
 import { LLMProvider, LLMRequest, LLMResponse } from "./llm-provider";
@@ -113,6 +114,8 @@ export interface OrchestratorResponse {
     error?: string;
     /** Exact private recommendation context for durable household-scoped persistence. */
     decisionJournalEntry?: DecisionJournalEntry;
+    /** Structured, independently validated recommendation. */
+    recommendation?: FinalRecommendation;
     /** Metadata for audit trail */
     metadata: {
         workflowType: AdvisorWorkflow;
@@ -300,9 +303,19 @@ export class AIOrchestrator {
                 },
             };
             const recommendationWorkflow = isRecommendationWorkflow(request.workflowType, researchRequirement)
-                ? buildToolBackedRecommendationWorkflow(toolResults, researchRequirement, research)
+                ? buildToolBackedRecommendationWorkflow({
+                    toolResults,
+                    researchRequirement,
+                    research,
+                    workflowType: request.workflowType,
+                    userMessage: continuity.resolvedMessage,
+                    householdId: request.householdId,
+                    memberId: request.memberId,
+                    conversationId: request.conversationId,
+                    policyVersion: request.householdPolicyVersion ?? 1,
+                })
                 : undefined;
-            if (researchRequirement.level === "REQUIRED" && !recommendationWorkflow?.finalRecommendation) {
+            if (recommendationWorkflow && !recommendationWorkflow.finalRecommendation) {
                 return this.buildFailureResponse(
                     request,
                     plan,
@@ -379,6 +392,21 @@ export class AIOrchestrator {
                 [...research.evidence, ...historicalEvidence]
             );
 
+            if (recommendationWorkflow?.finalRecommendation && !validated.groundingPassed) {
+                return this.buildFailureResponse(
+                    request,
+                    plan,
+                    toolResults,
+                    buildAdvisorFailure(AdvisorFailureCategory.RECOMMENDATION_UNAVAILABLE),
+                    startTime,
+                    {
+                        requirement: researchRequirement.level,
+                        status: research.status,
+                        evidenceCount: research.evidence.length,
+                    }
+                );
+            }
+
             // Step 9.5: If we reused a prior scenario, check whether the figures it relied on
             // have since changed. Current data always wins - disclose it rather than silently
             // giving a different-sounding answer.
@@ -418,6 +446,7 @@ export class AIOrchestrator {
                 toolResults,
                 success: true,
                 decisionJournalEntry,
+                recommendation: recommendationWorkflow?.finalRecommendation,
                 metadata: {
                     workflowType: request.workflowType,
                     toolsExecuted: toolResults.filter(r => r.success).length,
@@ -733,7 +762,12 @@ Please provide thoughtful financial advice based on the data above.`;
         const grounding = validateGroundedResponse(
             response.content,
             toolResults,
-            verifiedResearch.map((item) => ({ claim: item.claim, retrievalDate: item.retrievalDate }))
+            verifiedResearch.map((item) => ({
+                claim: item.claim,
+                retrievalDate: item.retrievalDate,
+                sourceName: item.source.name,
+                sourceUrl: item.sourceUrl,
+            }))
         );
         if (grounding.valid) {
             return { content: response.content, groundingPassed: true, violations: [] };

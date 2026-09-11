@@ -572,6 +572,29 @@ export interface AdvisorToolResult {
     data?: Record<string, unknown>;
 }
 
+export interface StructuredRecommendation {
+    recommendedAction: string;
+    why: string;
+    alternatives: Array<{ title: string; rationale: string }>;
+    impact: {
+        cashFlowImpact: number;
+        wealthIncrease: number;
+        debtReduction: number;
+        timeframeMonths?: number;
+    };
+    assumptions: Array<{ value: string; sensitivity?: string }>;
+    risks: Array<{ description: string; severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"; impact?: string }>;
+    evidence: Array<{ claim: string; sourceName: string; sourceUrl?: string; retrievalDate: string }>;
+    validation: {
+        status: "PASS" | "PASS_WITH_WARNINGS" | "FAIL" | "INSUFFICIENT_INFORMATION";
+        summary: string;
+        details: Array<{ category: string; status: "PASS" | "WARN" | "FAIL"; description: string }>;
+    };
+    confidence: "HIGH" | "MEDIUM" | "LOW" | "INSUFFICIENT_INFORMATION";
+    confidenceReasoning: string;
+    approvalRequired: boolean;
+}
+
 export interface OrchestrateResponse {
     messageId: string;
     assistantMessage: string;
@@ -581,6 +604,7 @@ export interface OrchestrateResponse {
     failureCategory?: string;
     /** Whether the UI should offer a [Try Again] action. */
     retryable: boolean;
+    recommendation?: StructuredRecommendation;
     metadata: {
         workflowType: string;
         toolsExecuted: number;
@@ -592,7 +616,7 @@ export interface OrchestrateResponse {
         };
         recommendation?: {
             candidateCount: number;
-            validationStatus: "PASS" | "INSUFFICIENT_INFORMATION";
+            validationStatus: "PASS" | "PASS_WITH_WARNINGS" | "FAIL" | "INSUFFICIENT_INFORMATION";
             finalRecommendationProduced: boolean;
         };
         advisorStyle?: string;

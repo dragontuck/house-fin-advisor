@@ -9,6 +9,7 @@ import {
     orchestrateAdvisorResponse,
     type AdvisorUxMode,
     type AdvisorToolResult,
+    type StructuredRecommendation,
 } from "../../api";
 import AdvisorResponseCard from "./AdvisorResponseCard";
 import { friendlyActivityForTool } from "./advisor-helpers";
@@ -40,6 +41,7 @@ interface Exchange {
     workflowType?: string;
     errorMessage?: string;
     retryable?: boolean;
+    recommendation?: StructuredRecommendation;
 }
 
 export default function AdvisorSection() {
@@ -70,6 +72,7 @@ export default function AdvisorSection() {
                         conversationId: convoId,
                         workflowType,
                         retryable: response.retryable,
+                        recommendation: response.recommendation,
                     }
                     : e
             )
@@ -253,6 +256,7 @@ export default function AdvisorSection() {
                                 assistantMessage={exchange.assistantMessage ?? ""}
                                 toolResults={exchange.toolResults}
                                 conversationId={exchange.conversationId ?? ""}
+                                recommendation={exchange.recommendation}
                             />
                         )}
                     </div>
