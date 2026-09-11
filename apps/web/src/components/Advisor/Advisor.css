@@ -225,3 +225,217 @@
     font-size: 0.85rem;
     margin-top: 0.5rem;
 }
+
+.recommendation-experience {
+    color: #1f2933;
+}
+
+.recommendation-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #1f6f5f;
+}
+
+.recommendation-eyebrow,
+.recommendation-section h5 {
+    margin: 0 0 0.4rem;
+    color: #66736f;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-transform: uppercase;
+}
+
+.recommendation-action {
+    max-width: 48rem;
+    margin: 0;
+    color: #15241f;
+    font-size: 1.25rem;
+    line-height: 1.35;
+}
+
+.recommendation-confidence {
+    flex: 0 0 auto;
+    padding: 0.3rem 0.55rem;
+    border: 1px solid #aab7b2;
+    border-radius: 4px;
+    background: #ffffff;
+    color: #40514b;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.confidence-high {
+    border-color: #2e7d32;
+    color: #236428;
+}
+
+.confidence-medium {
+    border-color: #a66b00;
+    color: #805300;
+}
+
+.confidence-low,
+.confidence-insufficient_information {
+    border-color: #b84040;
+    color: #9a3030;
+}
+
+.recommendation-section {
+    padding: 1rem 0;
+    border-bottom: 1px solid #e2e8e5;
+}
+
+.recommendation-section p {
+    margin: 0;
+    line-height: 1.55;
+}
+
+.recommendation-impact-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.75rem;
+    margin: 0;
+}
+
+.recommendation-impact-grid div {
+    min-width: 0;
+    padding-left: 0.75rem;
+    border-left: 3px solid #d69e2e;
+}
+
+.recommendation-impact-grid dt {
+    color: #66736f;
+    font-size: 0.75rem;
+}
+
+.recommendation-impact-grid dd {
+    margin: 0.25rem 0 0;
+    overflow-wrap: anywhere;
+    font-weight: 650;
+}
+
+.recommendation-two-column {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.5rem;
+}
+
+.recommendation-detail-list,
+.recommendation-source-list {
+    display: grid;
+    gap: 0.75rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.recommendation-detail-list li,
+.recommendation-source-list li {
+    display: grid;
+    gap: 0.2rem;
+}
+
+.recommendation-detail-list small,
+.recommendation-source-list small,
+.recommendation-persona p {
+    color: #66736f;
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
+
+.recommendation-detail-list.compact {
+    gap: 0.5rem;
+}
+
+.recommendation-source-list a {
+    color: #0969da;
+    font-weight: 650;
+}
+
+.recommendation-validation {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.validation-pass,
+.validation-attention {
+    font-weight: 650;
+}
+
+.validation-pass {
+    color: #236428;
+}
+
+.validation-attention {
+    color: #9a5800;
+}
+
+.recommendation-validation-details {
+    grid-column: 1 / -1;
+    padding: 0.75rem;
+    border-left: 3px solid #9aa7a2;
+    background: #ffffff;
+}
+
+.recommendation-validation-details>p {
+    margin-bottom: 0.65rem;
+}
+
+.recommendation-persona {
+    display: grid;
+    grid-template-columns: minmax(180px, auto) minmax(180px, 280px);
+    align-items: center;
+    gap: 0.5rem 1rem;
+    padding-top: 1rem;
+}
+
+.recommendation-persona label {
+    font-weight: 650;
+}
+
+.recommendation-persona select {
+    width: 100%;
+    padding: 0.5rem 2rem 0.5rem 0.65rem;
+    border: 1px solid #aab7b2;
+    border-radius: 4px;
+    background: #ffffff;
+    color: #1f2933;
+}
+
+.recommendation-persona p {
+    grid-column: 1 / -1;
+    margin: 0;
+}
+
+@media (max-width: 640px) {
+
+    .recommendation-header,
+    .recommendation-validation {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .recommendation-header {
+        display: flex;
+    }
+
+    .recommendation-two-column,
+    .recommendation-persona {
+        grid-template-columns: 1fr;
+    }
+
+    .recommendation-validation {
+        display: flex;
+    }
+
+    .recommendation-validation-details,
+    .recommendation-persona p {
+        width: 100%;
+    }
+}
