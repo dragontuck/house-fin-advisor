@@ -10,12 +10,11 @@ import { Request, Response, NextFunction } from "express";
 import { RouteContext, RouteRegistrar } from "./types";
 import { EntityId, AdvisorMessageRole, AdvisorWorkflow } from "@house-fin/contracts";
 import {
-    AIOrchestrator,
     getAIOrchestrator,
     OrchestratorRequest,
-    OrchestratorResponse,
     ConversationTurn,
     extractNumericFacts,
+    isHistoricalRecommendationQuestion,
 } from "@house-fin/ai";
 
 class OrchestratorError extends Error {
@@ -84,7 +83,7 @@ function getFriendlyActivity(toolName: string): string {
  * Register orchestrator routes
  */
 export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext) => {
-    const { app, advisorService, conversationRepo, aiAuditLogRepo } = context;
+    const { app, advisorService, conversationRepo, aiAuditLogRepo, decisionJournalRepo } = context;
 
     /**
      * POST /conversations/:conversationId/orchestrate
@@ -106,7 +105,7 @@ export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext
                 const { conversationId } = req.params;
                 const householdId = req.context!.householdId;
                 const correlationId = req.context!.correlationId;
-                const { workflowType, financialContext, advisorPersonaKey } = req.body;
+                const { workflowType, financialContext, advisorPersonaKey, householdPolicyVersion } = req.body;
 
                 if (!workflowType) {
                     throw new OrchestratorError(
@@ -122,9 +121,8 @@ export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext
                     throw new OrchestratorError(403, "Not authorized", "UNAUTHORIZED");
                 }
 
-                // Get the member ID from context (would come from auth)
-                // For now, use placeholder - should come from JWT/session
-                const memberId = req.headers["x-member-id"] as string || "default-member";
+                // The persisted conversation is the authoritative member scope for this request.
+                const memberId = conversation.memberId;
                 const isHouseholdOwner = req.headers["x-is-owner"] === "true" || false;
 
                 // Get the latest user message for context
@@ -140,6 +138,17 @@ export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext
                         400,
                         "No user message found in conversation",
                         "NO_USER_MESSAGE"
+                    );
+                }
+
+                const historicalRecommendationQuestion = isHistoricalRecommendationQuestion(lastUserMessage.content);
+                let historicalDecisionJournal = historicalRecommendationQuestion
+                    ? await decisionJournalRepo.findByConversationId(conversationId as EntityId, householdId)
+                    : undefined;
+                if (historicalRecommendationQuestion && historicalDecisionJournal?.length === 0) {
+                    historicalDecisionJournal = await decisionJournalRepo.findRelevantByHouseholdId(
+                        householdId,
+                        lastUserMessage.content
                     );
                 }
 
@@ -181,11 +190,22 @@ export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext
                     conversationHistory,
                     priorScenarioFacts,
                     advisorPersonaKey: typeof advisorPersonaKey === "string" ? advisorPersonaKey : undefined,
+                    householdPolicyVersion: typeof householdPolicyVersion === "number"
+                        ? householdPolicyVersion
+                        : undefined,
+                    historicalRecommendationQuestion,
+                    historicalDecisionJournal,
                 };
 
                 // Get orchestrator instance and process request
                 const orchestrator = getAIOrchestrator();
                 const orchestratorResponse = await orchestrator.processRequest(orchestratorRequest);
+
+                // A generated recommendation is not delivered unless its exact historical
+                // context has first been persisted. This prevents later reconstruction from live data.
+                if (orchestratorResponse.decisionJournalEntry) {
+                    await decisionJournalRepo.recordGeneration(orchestratorResponse.decisionJournalEntry);
+                }
 
                 // Metadata-only audit record - never includes financial payloads (see
                 // packages/db/migrations/012_add_ai_audit_log.sql). Recorded regardless of

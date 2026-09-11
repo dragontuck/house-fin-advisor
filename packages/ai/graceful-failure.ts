@@ -24,6 +24,7 @@ export enum AdvisorFailureCategory {
     FINANCIAL_ENGINE_UNAVAILABLE = "FINANCIAL_ENGINE_UNAVAILABLE",
     RESEARCH_UNAVAILABLE = "RESEARCH_UNAVAILABLE",
     RECOMMENDATION_UNAVAILABLE = "RECOMMENDATION_UNAVAILABLE",
+    HISTORICAL_CONTEXT_UNAVAILABLE = "HISTORICAL_CONTEXT_UNAVAILABLE",
     DIRECT_PERSISTENCE_BLOCKED = "DIRECT_PERSISTENCE_BLOCKED",
 }
 
@@ -77,6 +78,10 @@ const FAILURE_COPY: Record<AdvisorFailureCategory, { message: string; retryable:
     },
     [AdvisorFailureCategory.RECOMMENDATION_UNAVAILABLE]: {
         message: "I gathered the available information, but I couldn't independently validate a recommendation from it. I can provide limited general guidance, but not a verified recommendation right now.",
+        retryable: false,
+    },
+    [AdvisorFailureCategory.HISTORICAL_CONTEXT_UNAVAILABLE]: {
+        message: "I couldn't find the original recommendation record, so I won't reconstruct that past decision from today's financial data.",
         retryable: false,
     },
     [AdvisorFailureCategory.DIRECT_PERSISTENCE_BLOCKED]: {

@@ -31,6 +31,7 @@ import {
     PgToolExecutionRepository,
     PgBudgetApprovalRepository,
     PgAIAuditLogRepository,
+    PgDecisionJournalRepository,
 } from "../db/repositories";
 import { ObjectStorageAdapter } from "../storage/object-storage";
 
@@ -67,6 +68,7 @@ export interface RouteContext {
     workflowRepo: PgWorkflowStateRepository;
     toolExecutionRepo: PgToolExecutionRepository;
     aiAuditLogRepo: PgAIAuditLogRepository;
+    decisionJournalRepo: PgDecisionJournalRepository;
     // Storage
     storageAdapter: ObjectStorageAdapter;
 }

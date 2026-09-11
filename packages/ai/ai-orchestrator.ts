@@ -20,10 +20,10 @@
  * - Observable: every step is logged
  */
 
-import { EntityId, AdvisorWorkflow, WorkflowState, AIAuditLogEntry, Evidence } from "@house-fin/contracts";
-import { AIToolPlanner, PlannedToolCall, ToolExecutionPlan } from "./ai-tool-planner";
+import { EntityId, AdvisorWorkflow, AIAuditLogEntry, DecisionJournalEntry, DecisionJournalRecord, Evidence } from "@house-fin/contracts";
+import { AIToolPlanner, ToolExecutionPlan } from "./ai-tool-planner";
 import { AIToolExecutor, ToolExecutionContext, ToolExecutionResult } from "./ai-tool-executor";
-import { LLMProvider, LLMRequest, LLMResponse, LLMProviderError } from "./llm-provider";
+import { LLMProvider, LLMRequest, LLMResponse } from "./llm-provider";
 import { PrivacyGateway, getPrivacyGateway } from "@house-fin/security";
 import { validateGroundedResponse, buildSafeFallback, GroundingViolation } from "./response-grounding";
 import {
@@ -59,6 +59,7 @@ import {
     resolveAdvisorStyle,
     OrchestratedRecommendationWorkflow,
 } from "./recommendation-workflow";
+import { buildDecisionJournalEntry } from "./decision-journal";
 
 /**
  * Request to process by orchestrator
@@ -88,6 +89,12 @@ export interface OrchestratorRequest {
     priorScenarioFacts?: Record<string, number>;
     /** Presentation-only persona key. Never used for calculations, research, or validation. */
     advisorPersonaKey?: string;
+    /** Version of the household policy applied to this recommendation. */
+    householdPolicyVersion?: number;
+    /** Whether the user is asking for the rationale behind a historical recommendation. */
+    historicalRecommendationQuestion?: boolean;
+    /** Household-scoped archived recommendation records; never reconstructed from current data. */
+    historicalDecisionJournal?: DecisionJournalRecord[];
 }
 
 /**
@@ -104,6 +111,8 @@ export interface OrchestratorResponse {
     success: boolean;
     /** Error message if failed */
     error?: string;
+    /** Exact private recommendation context for durable household-scoped persistence. */
+    decisionJournalEntry?: DecisionJournalEntry;
     /** Metadata for audit trail */
     metadata: {
         workflowType: AdvisorWorkflow;
@@ -128,6 +137,7 @@ export interface OrchestratorResponse {
             evidenceCount: number;
         };
         recommendation?: {
+            recommendationId?: EntityId;
             candidateCount: number;
             validationStatus: OrchestratedRecommendationWorkflow["validation"]["status"];
             finalRecommendationProduced: boolean;
@@ -217,6 +227,16 @@ export class AIOrchestrator {
                 return this.buildFailureResponse(request, plan, toolResults, classifyDirectPersistenceAttempt(), startTime);
             }
 
+            if (request.historicalRecommendationQuestion && !request.historicalDecisionJournal?.length) {
+                return this.buildFailureResponse(
+                    request,
+                    plan,
+                    toolResults,
+                    buildAdvisorFailure(AdvisorFailureCategory.HISTORICAL_CONTEXT_UNAVAILABLE),
+                    startTime
+                );
+            }
+
             // Step 5: Extract results for LLM
             const toolResultsForLLM = this.toolExecutor.getResultsForLLM(toolResults, plan.tools);
 
@@ -229,10 +249,16 @@ export class AIOrchestrator {
             // Step 6.5: Decide whether current external facts are material. Required research
             // must be verified before an explanation can be generated; absence is never treated
             // as evidence that the LLM can fill in from memory.
-            const researchRequirement = determineResearchRequirement(
-                continuity.resolvedMessage,
-                request.workflowType
-            );
+            const researchRequirement = request.historicalRecommendationQuestion
+                ? {
+                    level: "NOT_REQUIRED" as const,
+                    reason: "Historical explanations use evidence preserved in the decision journal.",
+                    queries: [],
+                }
+                : determineResearchRequirement(
+                    continuity.resolvedMessage,
+                    request.workflowType
+                );
             const research = await performRequiredResearch(
                 researchRequirement,
                 this.researchProvider,
@@ -294,6 +320,7 @@ export class AIOrchestrator {
             const recommendationContext = {
                 ...contextWithResearch,
                 recommendationWorkflow,
+                historicalDecisionJournal: request.historicalDecisionJournal,
                 presentation: {
                     advisorStyle: advisorStyle.label,
                     instruction: advisorStyle.instruction,
@@ -321,7 +348,8 @@ export class AIOrchestrator {
                     sanitizedContext,
                     plan,
                     request.correlationId,
-                    advisorStyle.instruction
+                    advisorStyle.instruction,
+                    request.historicalRecommendationQuestion ?? false
                 );
             } catch (error) {
                 return this.buildFailureResponse(request, plan, toolResults, classifyLLMError(error), startTime);
@@ -339,7 +367,17 @@ export class AIOrchestrator {
 
             // Step 9: Validate response is grounded in tool results; substitute a safe,
             // deterministic fallback if the LLM said anything unsupported.
-            const validated = this.validateResponse(llmResponse, toolResults, research.evidence);
+            const historicalToolResults = (request.historicalDecisionJournal ?? []).flatMap((record) => {
+                const archived = record.entry.currentFinancialState.toolResults;
+                return Array.isArray(archived) ? archived as ToolExecutionResult[] : [];
+            });
+            const historicalEvidence = (request.historicalDecisionJournal ?? [])
+                .flatMap((record) => record.entry.evidence);
+            const validated = this.validateResponse(
+                llmResponse,
+                [...toolResults, ...historicalToolResults],
+                [...research.evidence, ...historicalEvidence]
+            );
 
             // Step 9.5: If we reused a prior scenario, check whether the figures it relied on
             // have since changed. Current data always wins - disclose it rather than silently
@@ -361,11 +399,25 @@ export class AIOrchestrator {
             // Step 10: Build final orchestrator response
             const llmProviderInfo = this.getLLMProviderInfo();
             const totalDurationMs = Date.now() - startTime;
+            const decisionJournalEntry = recommendationWorkflow?.finalRecommendation
+                ? buildDecisionJournalEntry({
+                    request,
+                    toolResults,
+                    evidence: research.evidence,
+                    workflow: recommendationWorkflow,
+                    presentedRecommendation: assistantMessage,
+                    groundingPassed: validated.groundingPassed,
+                    groundingViolations: validated.violations.map((violation) => violation.type),
+                    advisorStyle,
+                    generatedAt: new Date(),
+                })
+                : undefined;
             return {
                 correlationId: request.correlationId,
                 assistantMessage,
                 toolResults,
                 success: true,
+                decisionJournalEntry,
                 metadata: {
                     workflowType: request.workflowType,
                     toolsExecuted: toolResults.filter(r => r.success).length,
@@ -390,6 +442,7 @@ export class AIOrchestrator {
                         evidenceCount: research.evidence.length,
                     },
                     recommendation: recommendationWorkflow ? {
+                        recommendationId: decisionJournalEntry?.recommendationId,
                         candidateCount: recommendationWorkflow.candidates.length,
                         validationStatus: recommendationWorkflow.validation.status,
                         finalRecommendationProduced: recommendationWorkflow.finalRecommendation !== undefined,
@@ -513,11 +566,6 @@ export class AIOrchestrator {
     ): Map<string, Record<string, unknown>> {
         const params = new Map<string, Record<string, unknown>>();
 
-        // Default parameters for all tools
-        const defaultParams = {
-            householdId: request.householdId,
-        };
-
         // Set parameters for each tool
         for (const tool of plan.tools) {
             params.set(tool.toolName, this.getToolParameters(tool.toolName, request));
@@ -591,9 +639,14 @@ export class AIOrchestrator {
         sanitizedContext: Record<string, unknown>,
         plan: ToolExecutionPlan,
         correlationId: EntityId,
-        advisorStyleInstruction: string
+        advisorStyleInstruction: string,
+        historicalRecommendationQuestion: boolean
     ): Promise<LLMResponse> {
-        const systemPrompt = this.buildSystemPrompt(plan, advisorStyleInstruction);
+        const systemPrompt = this.buildSystemPrompt(
+            plan,
+            advisorStyleInstruction,
+            historicalRecommendationQuestion
+        );
 
         const request: LLMRequest = {
             correlationId,
@@ -618,7 +671,11 @@ export class AIOrchestrator {
     /**
      * Build system prompt for the LLM
      */
-    private buildSystemPrompt(plan: ToolExecutionPlan, advisorStyleInstruction: string): string {
+    private buildSystemPrompt(
+        plan: ToolExecutionPlan,
+        advisorStyleInstruction: string,
+        historicalRecommendationQuestion: boolean
+    ): string {
         return `You are a personal financial advisor helping households manage their finances.
 
 Your role:
@@ -642,6 +699,9 @@ Important constraints:
 - If research is optional or not required, distinguish household calculations from general guidance
 - If recommendation validation is INSUFFICIENT_INFORMATION, clearly state that no verified recommendation can be produced and provide only limited general guidance
 - Use the advisor style only to frame the explanation; never change calculations, evidence, validation, or the final recommendation
+- ${historicalRecommendationQuestion
+                ? "Explain the past recommendation only from historicalDecisionJournal. Clearly distinguish its archived financial state and policy from current data."
+                : "Do not claim to explain a past recommendation unless historicalDecisionJournal is supplied."}
 - Do not imply that a named person or organization provided or endorsed the advice
 - When uncertain, ask for clarification rather than guessing`;
     }

@@ -95,6 +95,7 @@ import {
     PgWorkflowStateRepository,
     PgToolExecutionRepository,
     PgAIAuditLogRepository,
+    PgDecisionJournalRepository,
 } from "./db/repositories";
 import { householdContextMiddleware, verifyHouseholdContext } from "./middleware/household-context";
 import { uploadRateLimiter } from "./middleware/rate-limit";
@@ -106,6 +107,7 @@ import { registerAdvisorConversationRoutes } from "./routes/advisor-conversation
 import { registerOrchestratorRoutes } from "./routes/ai-orchestrator";
 import { registerToolExecutionRoutes } from "./routes/tool-execution";
 import { registerAIAuditRoutes } from "./routes/ai-audit";
+import { registerDecisionJournalRoutes } from "./routes/decision-journal";
 
 /**
  * Error with context
@@ -194,6 +196,7 @@ export function createServer(): Express {
     const workflowRepo = new PgWorkflowStateRepository();
     const toolExecutionRepo = new PgToolExecutionRepository();
     const aiAuditLogRepo = new PgAIAuditLogRepository();
+    const decisionJournalRepo = new PgDecisionJournalRepository();
 
     const budgetRepo = new PgBudgetRepository();
     const budgetService = createBudgetService();
@@ -2853,12 +2856,14 @@ export function createServer(): Express {
         workflowRepo,
         toolExecutionRepo,
         aiAuditLogRepo,
+        decisionJournalRepo,
         storageAdapter,
     };
 
     registerBudgetApprovalRoutes(approvalRouteContext);
     registerAdvisorConversationRoutes(approvalRouteContext);
     registerOrchestratorRoutes(approvalRouteContext);
+    registerDecisionJournalRoutes(approvalRouteContext);
     registerToolExecutionRoutes(approvalRouteContext);
     registerAIAuditRoutes(approvalRouteContext);
 

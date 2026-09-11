@@ -1914,5 +1914,8 @@ export * from "./ai-audit";
 // ── Slice 5: Recommendation Contracts ──────────────────────────────────────────
 export * from "./recommendation";
 
+// ── Slice 5: Decision Journal Contracts ───────────────────────────────────────
+export * from "./decision-journal";
+
 // ── Slice 5: Advisor Persona Contracts ─────────────────────────────────────────
 export * from "./advisor-persona";

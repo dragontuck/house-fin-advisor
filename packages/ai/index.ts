@@ -141,6 +141,12 @@ export {
 } from "./audit-log";
 
 export {
+    buildDecisionJournalEntry,
+    isHistoricalRecommendationQuestion,
+    type BuildDecisionJournalEntryInput,
+} from "./decision-journal";
+
+export {
     AdvisorFailureCategory,
     buildAdvisorFailure,
     classifyLLMError,

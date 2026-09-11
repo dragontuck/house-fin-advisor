@@ -1,6 +1,7 @@
 import {
     AdvisorWorkflow,
     ConfidenceLevel,
+    DecisionJournalRecord,
     EntityId,
     SourceAuthority,
     SourceTier,
@@ -96,7 +97,7 @@ class VerifiedResearchProvider implements RecommendationResearchProvider {
 function createOrchestrator(researchProvider?: RecommendationResearchProvider) {
     const executor = new AIToolExecutor();
     executor.registerTool("get_financial_snapshot", async () => ({
-        snapshot: { netWorthCents: 100000 },
+        snapshot: { id: "snapshot-1", version: 7, netWorthCents: 100000 },
         recommendations: ["Keep the card."],
     }));
     const llm = new CapturingLLMProvider();
@@ -120,6 +121,7 @@ function creditCardRequest(advisorPersonaKey?: string) {
         memberId: "member-1" as EntityId,
         isHouseholdOwner: true,
         advisorPersonaKey,
+        householdPolicyVersion: 3,
     };
 }
 
@@ -158,6 +160,7 @@ describe("research-aware recommendation orchestration", () => {
             evidenceCount: 1,
         });
         expect(response.metadata.recommendation).toEqual({
+            recommendationId: "request-1",
             candidateCount: 1,
             validationStatus: "PASS",
             finalRecommendationProduced: true,
@@ -165,6 +168,32 @@ describe("research-aware recommendation orchestration", () => {
         expect(response.metadata.advisorStyle).toBe("Family Planning");
         expect(response.metadata.groundingPassed).toBe(true);
         expect(response.assistantMessage).toContain("$95 annual fee");
+        expect(response.decisionJournalEntry).toMatchObject({
+            recommendationId: "request-1",
+            question: "Should we keep this credit card?",
+            financialSnapshotId: "snapshot-1",
+            financialSnapshotVersion: 7,
+            householdPolicyVersion: 3,
+            recommendation: {
+                deterministicRecommendation: "Keep the card.",
+                presentedRecommendation: "The verified issuer terms show a $95 annual fee. Keep the card.",
+            },
+            alternatives: [],
+            validation: {
+                recommendationStatus: "PASS",
+                groundingPassed: true,
+            },
+            personaUsed: {
+                key: "carson_framework",
+                label: "Family Planning",
+            },
+            approvalState: "PENDING",
+        });
+        expect(response.decisionJournalEntry?.evidence).toHaveLength(1);
+        expect(response.decisionJournalEntry?.scenarios[0]).toMatchObject({
+            toolName: "get_financial_snapshot",
+            success: true,
+        });
         expect(llm.calls).toHaveLength(1);
 
         const serializedContext = JSON.stringify(privacy.contexts[0]);
@@ -173,5 +202,80 @@ describe("research-aware recommendation orchestration", () => {
         expect(serializedContext).not.toContain("Raw source content");
         expect(llm.calls[0].messages[0].content).toContain("household decision-making");
         expect(llm.calls[0].messages[0].content).toContain("never change calculations");
+    });
+
+    test("explains a historical recommendation from archived context without fresh research", async () => {
+        const { orchestrator, llm, privacy } = createOrchestrator();
+        const historicalRecord = {
+            entry: {
+                recommendationId: "old-recommendation" as EntityId,
+                correlationId: "old-recommendation" as EntityId,
+                householdId: "household-1" as EntityId,
+                memberId: "member-1" as EntityId,
+                workflowType: AdvisorWorkflow.GENERAL_FINANCIAL_QUESTION,
+                question: "Should we keep this credit card?",
+                currentFinancialState: {
+                    toolResults: [{
+                        sequence: 1,
+                        toolName: "get_financial_snapshot",
+                        success: true,
+                        data: { annualFeeCents: 9500 },
+                        durationMs: 1,
+                        retries: 0,
+                        executedAt: new Date("2026-03-11T00:00:00.000Z"),
+                    }],
+                },
+                financialSnapshotVersion: 5,
+                householdPolicyVersion: 2,
+                scenarios: [],
+                evidence: [],
+                recommendation: {
+                    deterministicRecommendation: "Keep the card.",
+                    presentedRecommendation: "Keep the card because its benefits exceeded the $95 fee.",
+                },
+                alternatives: ["Close the card."],
+                validation: {
+                    recommendationStatus: "PASS" as const,
+                    recommendationSummary: "Validated.",
+                    groundingPassed: true,
+                    groundingViolations: [],
+                },
+                confidence: { level: "HIGH" as const, reasoning: "Complete data." },
+                personaUsed: { key: "carson_framework", label: "Family Planning", instruction: "Family framing." },
+                approvalState: "PENDING" as const,
+                generatedAt: new Date("2026-03-11T00:00:00.000Z"),
+            },
+            decisions: [],
+            currentApprovalState: "PENDING" as const,
+        } satisfies DecisionJournalRecord;
+
+        const response = await orchestrator.processRequest({
+            ...creditCardRequest(),
+            userMessage: "Why did you recommend keeping the card?",
+            historicalRecommendationQuestion: true,
+            historicalDecisionJournal: [historicalRecord],
+        });
+
+        expect(response.success).toBe(true);
+        expect(response.decisionJournalEntry).toBeUndefined();
+        expect(llm.calls).toHaveLength(1);
+        expect(JSON.stringify(privacy.contexts[0])).toContain("old-recommendation");
+        expect(llm.calls[0].messages[0].content).toContain("only from historicalDecisionJournal");
+    });
+
+    test("does not reconstruct a historical recommendation when no journal record exists", async () => {
+        const { orchestrator, llm } = createOrchestrator();
+
+        const response = await orchestrator.processRequest({
+            ...creditCardRequest(),
+            userMessage: "Why did you recommend keeping the card?",
+            historicalRecommendationQuestion: true,
+            historicalDecisionJournal: [],
+        });
+
+        expect(response.success).toBe(false);
+        expect(response.metadata.failureCategory).toBe(AdvisorFailureCategory.HISTORICAL_CONTEXT_UNAVAILABLE);
+        expect(response.assistantMessage).toContain("won't reconstruct");
+        expect(llm.calls).toHaveLength(0);
     });
 });

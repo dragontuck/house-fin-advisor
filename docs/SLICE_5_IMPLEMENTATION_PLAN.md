@@ -6,6 +6,19 @@
 
 ---
 
+## Decision Journal Integration Update (2026-09-11)
+
+Implemented through migration `017_add_decision_journal.sql`, the AI orchestrator, and household-scoped API routes.
+
+- Every generated recommendation is persisted before delivery with its exact question, financial context and tool outputs, snapshot identity/version when available, policy version when supplied, scenarios, evidence, recommendation, alternatives, validation, confidence assessment, persona, pending approval state, and generation timestamp.
+- Generation records are immutable. Approval and decline decisions are append-only records and never rewrite the original context.
+- Historical “why did you recommend...” questions load archived journal records from the original conversation or a household-scoped relevance search.
+- Historical explanations are grounded against archived tool results and evidence. If no matching journal exists, the advisor refuses to reconstruct the past decision from current data.
+- Journal retrieval is available at `GET /api/recommendations/:recommendationId/journal` and `GET /api/conversations/:conversationId/decision-journal`.
+- User decisions are recorded at `POST /api/recommendations/:recommendationId/decision`.
+
+---
+
 ## Phase 1: Contracts & Data Models
 
 ### 1.1 Recommendation Model Contracts
@@ -638,7 +651,7 @@ POST   /api/recommendations/:id/re-validate -- Re-run validation
 1. ✅ **Phase 1a**: Create contracts (recommendation, evidence, validation, persona, approval)
 2. ✅ **Phase 1b**: Update main contracts index
 3. ✅ **Phase 2**: Create migrations (5 new tables, 1 schema alter)
-4. ✅ **Phase 3**: Create domain services (builder, validator, evidence tracker, journal)
+4. ✅ **Phase 3**: Create domain services (builder, validator, evidence tracker, journal snapshot builder)
 5. ✅ **Phase 3**: Add repositories (recommendations, evidence, validation audit, decision journal)
 6. ✅ **Phase 4**: Create API endpoints and handlers
 7. ✅ **Phase 5**: Create comprehensive tests
@@ -656,8 +669,8 @@ POST   /api/recommendations/:id/re-validate -- Re-run validation
 - [ ] Approval workflow prevents auto-changes
 - [ ] Personas affect presentation not calculation
 - [ ] No impersonation language used
-- [ ] Complete decision journal auditable
-- [ ] Recommendations reproducible from saved inputs
+- [x] Complete decision journal auditable
+- [x] Recommendations reproducible from saved inputs
 - [ ] Failed validation blocks normal delivery
 - [ ] All E2E tests pass
 - [ ] Slices 1-4 continue to work

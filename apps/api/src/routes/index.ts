@@ -18,6 +18,7 @@ import { registerSnapshotRoutes } from "./snapshots";
 import { registerAdvisorConversationRoutes } from "./advisor-conversations";
 import { registerToolExecutionRoutes } from "./tool-execution";
 import { registerOrchestratorRoutes } from "./ai-orchestrator";
+import { registerDecisionJournalRoutes } from "./decision-journal";
 
 /**
  * All route registrars to be called in order
@@ -36,6 +37,7 @@ const routeRegistrars: RouteRegistrar[] = [
     registerHealthRoutes,                  // Health analysis and attention items
     registerAdvisorConversationRoutes,     // Conversational advisor with intent classification
     registerOrchestratorRoutes,            // AI orchestrator with tool planning and execution
+    registerDecisionJournalRoutes,         // Immutable recommendation history and user decisions
     registerToolExecutionRoutes,           // AI tool execution endpoints
 ];
 
@@ -65,5 +67,6 @@ export {
     registerSnapshotRoutes,
     registerAdvisorConversationRoutes,
     registerOrchestratorRoutes,
+    registerDecisionJournalRoutes,
     registerToolExecutionRoutes,
 };

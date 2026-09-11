@@ -1900,3 +1900,6 @@ export { PgBudgetApprovalRepository } from "./repositories/budget-approval";
 
 // Re-export AI audit log repository
 export { PgAIAuditLogRepository, createAIAuditLogRepository } from "./repositories/ai-audit-log";
+
+// Re-export household-private decision journal repository
+export { PgDecisionJournalRepository } from "./repositories/decision-journal";
