@@ -4,8 +4,7 @@
  */
 
 import { Request, Response, NextFunction } from "express";
-import { v4 as uuidv4 } from "uuid";
-import { EntityId, CreateBudgetRequest, UpdateBudgetRequest, Budget } from "@house-fin/contracts";
+import { EntityId, Money, CreateBudgetRequest, UpdateBudgetRequest } from "@house-fin/contracts";
 import { createBudgetService } from "@house-fin/domain";
 import { RouteContext, RouteRegistrar } from "./types";
 
@@ -26,8 +25,8 @@ class ApiError extends Error {
  * Register budget endpoints
  */
 export const registerBudgetRoutes: RouteRegistrar = (context: RouteContext) => {
-    const { app, budgetRepo, accountRepo } = context;
-    const budgetService = createBudgetService(budgetRepo);
+    const { app, budgetRepo } = context;
+    const budgetService = createBudgetService();
 
     /**
      * POST /budgets
@@ -36,31 +35,39 @@ export const registerBudgetRoutes: RouteRegistrar = (context: RouteContext) => {
     app.post("/budgets", async (req: Request, res: Response, next: NextFunction) => {
         try {
             const householdId = req.context!.householdId;
-            const { categoryName, monthlyLimitCents, description, isEssential } = req.body as CreateBudgetRequest;
+            const body = req.body as CreateBudgetRequest;
 
-            if (!categoryName || typeof monthlyLimitCents !== "number") {
-                throw new ApiError(400, "Missing required fields: categoryName, monthlyLimitCents", "BUDGET_INVALID_REQUEST");
+            try {
+                budgetService.validateBudget(body.periodYear, body.periodMonth, body.category, body.amountCents);
+            } catch (validationError) {
+                throw new ApiError(
+                    400,
+                    validationError instanceof Error ? validationError.message : "Invalid budget data.",
+                    "BUDGET_INVALID_REQUEST"
+                );
+            }
+
+            const existing = await budgetRepo.findByCategory(
+                householdId,
+                body.periodYear,
+                body.periodMonth,
+                body.category
+            );
+            if (existing) {
+                throw new ApiError(409, "A budget already exists for this category and period.", "BUDGET_ALREADY_EXISTS");
             }
 
             const budget = await budgetRepo.create({
                 householdId,
-                categoryName,
-                monthlyLimitCents,
-                description: description || undefined,
-                isEssential: isEssential ?? false,
-                createdAt: new Date(),
-                updatedAt: new Date(),
+                periodYear: body.periodYear,
+                periodMonth: body.periodMonth,
+                category: body.category.trim(),
+                amountCents: body.amountCents as Money,
+                goalId: body.goalId as EntityId | undefined,
+                notes: body.notes,
             });
 
-            res.status(201).json({
-                id: budget.id,
-                categoryName: budget.categoryName,
-                monthlyLimitCents: budget.monthlyLimitCents,
-                monthlyLimitDollars: budget.monthlyLimitCents / 100,
-                description: budget.description,
-                isEssential: budget.isEssential,
-                createdAt: budget.createdAt,
-            });
+            res.status(201).json(budget);
         } catch (error) {
             next(error);
         }
@@ -73,33 +80,15 @@ export const registerBudgetRoutes: RouteRegistrar = (context: RouteContext) => {
     app.get("/budgets", async (req: Request, res: Response, next: NextFunction) => {
         try {
             const householdId = req.context!.householdId;
+            const year = Number(req.query.year);
+            const month = Number(req.query.month);
 
-            const budgets = await budgetRepo.findByHouseholdId(householdId);
+            if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+                throw new ApiError(400, "Provide valid year and month query parameters.", "BUDGET_INVALID_PERIOD");
+            }
 
-            const results = await Promise.all(
-                budgets.map(async (b) => {
-                    const result = budgetService.calculateBudgetResults({
-                        budget: b,
-                        asOf: new Date(),
-                    });
-
-                    return {
-                        id: b.id,
-                        categoryName: b.categoryName,
-                        monthlyLimitDollars: b.monthlyLimitCents / 100,
-                        actualSpendingDollars: result.actualSpendingCents / 100,
-                        variance: {
-                            amountDollars: result.varianceCents / 100,
-                            isOver: result.varianceCents > 0,
-                            percentageOver: ((result.varianceCents / b.monthlyLimitCents) * 100).toFixed(1),
-                        },
-                        status: result.status,
-                        isEssential: b.isEssential,
-                    };
-                })
-            );
-
-            res.json(results);
+            const budgets = await budgetRepo.findByHouseholdAndPeriod(householdId, year, month);
+            res.json(budgets);
         } catch (error) {
             next(error);
         }
@@ -119,23 +108,22 @@ export const registerBudgetRoutes: RouteRegistrar = (context: RouteContext) => {
                 throw new ApiError(404, "Budget not found", "BUDGET_NOT_FOUND");
             }
 
-            const result = budgetService.calculateBudgetResults({
-                budget,
+            const transactions = await budgetRepo.getTransactionsForPeriod(
+                householdId,
+                budget.periodYear,
+                budget.periodMonth
+            );
+            const resultSet = budgetService.calculateResults({
+                householdId,
+                period: { year: budget.periodYear, month: budget.periodMonth },
+                budgets: [budget],
+                transactions,
                 asOf: new Date(),
             });
 
             res.json({
-                id: budget.id,
-                categoryName: budget.categoryName,
-                monthlyLimitDollars: budget.monthlyLimitCents / 100,
-                actualSpendingDollars: result.actualSpendingCents / 100,
-                variance: {
-                    amountDollars: result.varianceCents / 100,
-                    isOver: result.varianceCents > 0,
-                },
-                status: result.status,
-                description: budget.description,
-                isEssential: budget.isEssential,
+                budget,
+                result: resultSet.results.find((item) => item.category === budget.category),
             });
         } catch (error) {
             next(error);
@@ -150,27 +138,40 @@ export const registerBudgetRoutes: RouteRegistrar = (context: RouteContext) => {
         try {
             const householdId = req.context!.householdId;
             const budgetId = req.params.id as EntityId;
-            const { monthlyLimitCents, description, isEssential } = req.body as UpdateBudgetRequest;
+            const body = req.body as UpdateBudgetRequest & { version?: number };
 
             const budget = await budgetRepo.findById(budgetId);
             if (!budget || budget.householdId !== householdId) {
                 throw new ApiError(404, "Budget not found", "BUDGET_NOT_FOUND");
             }
 
-            const updated = await budgetRepo.update(budgetId, {
-                monthlyLimitCents: monthlyLimitCents ?? budget.monthlyLimitCents,
-                description: description ?? budget.description,
-                isEssential: isEssential ?? budget.isEssential,
-                updatedAt: new Date(),
-            });
+            if (typeof body.version !== "number") {
+                throw new ApiError(400, "Include the current version number.", "BUDGET_VERSION_REQUIRED");
+            }
 
-            res.json({
-                id: updated.id,
-                categoryName: updated.categoryName,
-                monthlyLimitDollars: updated.monthlyLimitCents / 100,
-                description: updated.description,
-                isEssential: updated.isEssential,
-            });
+            if (body.amountCents !== undefined) {
+                try {
+                    budgetService.validateBudget(
+                        budget.periodYear,
+                        budget.periodMonth,
+                        budget.category,
+                        body.amountCents
+                    );
+                } catch (validationError) {
+                    throw new ApiError(
+                        400,
+                        validationError instanceof Error ? validationError.message : "Invalid budget amount.",
+                        "BUDGET_INVALID_REQUEST"
+                    );
+                }
+            }
+
+            const updated = await budgetRepo.update(budgetId, {
+                amountCents: body.amountCents,
+                notes: body.notes,
+            }, body.version);
+
+            res.json(updated);
         } catch (error) {
             next(error);
         }
@@ -190,7 +191,7 @@ export const registerBudgetRoutes: RouteRegistrar = (context: RouteContext) => {
                 throw new ApiError(404, "Budget not found", "BUDGET_NOT_FOUND");
             }
 
-            await budgetRepo.delete(budgetId);
+            await budgetRepo.delete(budgetId, householdId);
             res.status(204).send();
         } catch (error) {
             next(error);
