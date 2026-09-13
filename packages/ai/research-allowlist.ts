@@ -136,6 +136,168 @@ export const RESEARCH_ALLOWLIST: Record<string, AllowlistedSource> = {
         query: "credit_score_ranges",
     },
 
+    // ========== TIER_3_RESEARCH: Academic Institutions & Education ==========
+    KHAN_ACADEMY_FINANCE: {
+        name: "Khan Academy",
+        type: "RESEARCH",
+        tier: SourceTier.TIER_3_RESEARCH,
+        authority: SourceAuthority.ACADEMIC,
+        endpoint: "https://www.khanacademy.org/college-careers-more/personal-finance",
+        query: "personal_finance_education",
+    },
+    GFLEC: {
+        name: "Global Financial Literacy Excellence Center",
+        type: "RESEARCH",
+        tier: SourceTier.TIER_3_RESEARCH,
+        authority: SourceAuthority.ACADEMIC,
+        endpoint: "https://gflec.org",
+        query: "financial_literacy",
+    },
+    NGPF: {
+        name: "Next Gen Personal Finance",
+        type: "RESEARCH",
+        tier: SourceTier.TIER_3_RESEARCH,
+        authority: SourceAuthority.ACADEMIC,
+        endpoint: "https://www.ngpf.org",
+        query: "personal_finance_curriculum",
+    },
+    COURSERA: {
+        name: "Coursera",
+        type: "RESEARCH",
+        tier: SourceTier.TIER_3_RESEARCH,
+        authority: SourceAuthority.ACADEMIC,
+        endpoint: "https://www.coursera.org",
+        query: "finance_courses",
+    },
+
+    // ========== TIER_2_PROVIDER: Institutional & Government Research ==========
+    CFPB: {
+        name: "Consumer Financial Protection Bureau",
+        type: "GOVERNMENT",
+        tier: SourceTier.TIER_2_PROVIDER,
+        authority: SourceAuthority.INSTITUTIONAL,
+        endpoint: "https://www.consumerfinance.gov",
+        query: "consumer_finance_information",
+    },
+    MYMONEY_GOV: {
+        name: "MyMoney.gov",
+        type: "GOVERNMENT",
+        tier: SourceTier.TIER_2_PROVIDER,
+        authority: SourceAuthority.INSTITUTIONAL,
+        endpoint: "https://www.mymoney.gov",
+        query: "financial_information",
+    },
+    FINRA_FOUNDATION: {
+        name: "FINRA Investor Education Foundation",
+        type: "RESEARCH",
+        tier: SourceTier.TIER_2_PROVIDER,
+        authority: SourceAuthority.INSTITUTIONAL,
+        endpoint: "https://www.finrafoundation.org",
+        query: "investor_education",
+    },
+    FDIC_MONEY_SMART: {
+        name: "FDIC Money Smart",
+        type: "GOVERNMENT",
+        tier: SourceTier.TIER_2_PROVIDER,
+        authority: SourceAuthority.INSTITUTIONAL,
+        endpoint: "https://www.fdic.gov/resources/consumers/money-smart",
+        query: "banking_financial_literacy",
+    },
+
+    // ========== TIER_4_MEDIA: News & Media ==========
+    CNBC_MAKE_IT: {
+        name: "CNBC Make It",
+        type: "MEDIA",
+        tier: SourceTier.TIER_4_MEDIA,
+        authority: SourceAuthority.COMMERCIAL,
+        endpoint: "https://www.cnbc.com/make-it",
+        query: "personal_finance_news",
+    },
+    NPR_PLANET_MONEY: {
+        name: "NPR's Planet Money",
+        type: "MEDIA",
+        tier: SourceTier.TIER_4_MEDIA,
+        authority: SourceAuthority.COMMERCIAL,
+        endpoint: "https://www.npr.org/sections/money",
+        query: "finance_news",
+    },
+    INVESTOPEDIA: {
+        name: "Investopedia",
+        type: "MEDIA",
+        tier: SourceTier.TIER_4_MEDIA,
+        authority: SourceAuthority.COMMERCIAL,
+        endpoint: "https://www.investopedia.com",
+        query: "finance_information",
+    },
+    MARKETWATCH: {
+        name: "MarketWatch Personal Finance",
+        type: "MEDIA",
+        tier: SourceTier.TIER_4_MEDIA,
+        authority: SourceAuthority.COMMERCIAL,
+        endpoint: "https://www.marketwatch.com/personal-finance",
+        query: "personal_finance_advice",
+    },
+
+    // ========== TIER_4_MEDIA: Blogs ==========
+    THE_COLLEGE_INVESTOR: {
+        name: "The College Investor",
+        type: "MEDIA",
+        tier: SourceTier.TIER_4_MEDIA,
+        authority: SourceAuthority.COMMERCIAL,
+        endpoint: "https://thecollegeinvestor.com",
+        query: "student_loans_finance",
+    },
+    AFFORD_ANYTHING: {
+        name: "Afford Anything",
+        type: "MEDIA",
+        tier: SourceTier.TIER_4_MEDIA,
+        authority: SourceAuthority.COMMERCIAL,
+        endpoint: "https://affordanything.com",
+        query: "personal_finance",
+    },
+    BOGLEHEADS: {
+        name: "Bogleheads.org",
+        type: "MEDIA",
+        tier: SourceTier.TIER_4_MEDIA,
+        authority: SourceAuthority.COMMUNITY,
+        endpoint: "https://www.bogleheads.org",
+        query: "investment_philosophy",
+    },
+    CLEVER_GIRL_FINANCE: {
+        name: "Clever Girl Finance",
+        type: "MEDIA",
+        tier: SourceTier.TIER_4_MEDIA,
+        authority: SourceAuthority.COMMERCIAL,
+        endpoint: "https://www.clevergirlfinance.com",
+        query: "personal_finance",
+    },
+
+    // ========== TIER_4_MEDIA: Aggregators & Communities ==========
+    HARKSTER: {
+        name: "Harkster",
+        type: "MEDIA",
+        tier: SourceTier.TIER_4_MEDIA,
+        authority: SourceAuthority.COMMUNITY,
+        endpoint: "https://www.harkster.com",
+        query: "personal_finance_content",
+    },
+    FINVIZ: {
+        name: "Finviz",
+        type: "MEDIA",
+        tier: SourceTier.TIER_4_MEDIA,
+        authority: SourceAuthority.COMMERCIAL,
+        endpoint: "https://finviz.com",
+        query: "financial_data",
+    },
+    FEEDLY: {
+        name: "Feedly",
+        type: "MEDIA",
+        tier: SourceTier.TIER_4_MEDIA,
+        authority: SourceAuthority.COMMERCIAL,
+        endpoint: "https://feedly.com",
+        query: "finance_content_aggregation",
+    },
+
     // Note: Specific card/account terms must be verified by human before adding
 };
 
