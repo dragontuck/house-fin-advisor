@@ -71,6 +71,7 @@ import {
     simulateBudgetChange,
     simulatePurchase,
     CachedEvidenceResearchProvider,
+    AnthropicResearchProvider,
     defaultControlledResearchConfig,
     type ToolDependencies,
 } from "@house-fin/ai";
@@ -783,13 +784,18 @@ export function createServer(): Express {
         return createInitialBudget(householdId, month, toolDeps) as unknown as Record<string, unknown>;
     });
 
-    // Initialize AI Orchestrator
+    // Initialize AI Orchestrator with research provider
+    const enableResearch = process.env.ENABLE_RESEARCH === "true";
+    const researchProvider = enableResearch
+        ? new AnthropicResearchProvider()
+        : new CachedEvidenceResearchProvider(evidenceRepo, defaultControlledResearchConfig());
+
     const orchestrator = new AIOrchestrator(
         toolPlanner,
         toolExecutor,
         llmProvider,
         privacyGateway,
-        new CachedEvidenceResearchProvider(evidenceRepo, defaultControlledResearchConfig())
+        researchProvider
     );
 
     // Initialize the singleton

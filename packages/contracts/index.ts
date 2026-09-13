@@ -1913,6 +1913,7 @@ export * from "./ai-audit";
 
 // ── Slice 5: Recommendation Contracts ──────────────────────────────────────────
 export * from "./recommendation";
+export * from "./ui-recommendation";
 
 // ── Slice 5: Decision Journal Contracts ───────────────────────────────────────
 export * from "./decision-journal";

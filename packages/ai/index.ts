@@ -118,6 +118,8 @@ export {
 export {
     determineResearchRequirement,
     performRequiredResearch,
+    detectCurrentFactRequirement,
+    validateResearchEvidence,
     type ResearchRequirementLevel,
     type ResearchTopic,
     type ResearchQuery,
@@ -134,6 +136,17 @@ export {
     type AllowlistedResearchSource,
     type ControlledResearchConfig,
 } from "./production-research-provider";
+
+export {
+    AnthropicResearchProvider,
+} from "./anthropic-research-provider";
+
+export {
+    RESEARCH_ALLOWLIST,
+    isResearchAllowed,
+    getAllowedSourcesForClaim,
+    type AllowlistedSource,
+} from "./research-allowlist";
 
 export {
     buildToolBackedRecommendationWorkflow,

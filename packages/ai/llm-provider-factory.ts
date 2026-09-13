@@ -18,6 +18,8 @@ import {
     LLMTelemetryHandler,
 } from "./llm-provider";
 import { AnthropicProvider } from "./anthropic-provider";
+import { OpenAIProvider } from "./openai-provider";
+import { GeminiProvider } from "./gemini-provider";
 
 /**
  * Standard provider factory implementation
@@ -49,23 +51,19 @@ export class DefaultLLMProviderFactory implements LLMProviderFactory {
                 return new AnthropicProvider(config, telemetryHandler);
 
             case "openai":
-                throw new Error(
-                    "OpenAI provider not yet implemented. Supported: anthropic"
-                );
+                return new OpenAIProvider(config, telemetryHandler);
 
             case "gemini":
-                throw new Error(
-                    "Gemini provider not yet implemented. Supported: anthropic"
-                );
+                return new GeminiProvider(config, telemetryHandler);
 
             case "ollama":
                 throw new Error(
-                    "Ollama provider not yet implemented. Supported: anthropic"
+                    "Ollama provider not yet implemented. Supported: anthropic, openai, gemini"
                 );
 
             default:
                 throw new Error(
-                    `Unknown LLM provider: ${providerName}. Supported: anthropic`
+                    `Unknown LLM provider: ${providerName}. Supported: anthropic, openai, gemini`
                 );
         }
     }
@@ -75,9 +73,9 @@ export class DefaultLLMProviderFactory implements LLMProviderFactory {
      */
     getSupportedProviders(): string[] {
         return [
-            "anthropic", // Currently supported
-            "openai", // Planned
-            "gemini", // Planned
+            "anthropic", // Supported
+            "openai", // Supported
+            "gemini", // Supported
             "ollama", // Planned
         ];
     }

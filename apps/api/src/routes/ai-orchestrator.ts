@@ -80,6 +80,66 @@ function getFriendlyActivity(toolName: string): string {
 }
 
 /**
+ * Transform domain Recommendation to StructuredRecommendation for UI.
+ * CRITICAL-2: All validation, confidence, and assumptions come from domain layer.
+ * UI never synthesizes or fabricates these fields.
+ */
+function toStructuredRecommendation(domainRec: any) {
+    return {
+        recommendedAction: domainRec.recommendedAction || "",
+        why: domainRec.summary || "",
+        alternatives: (domainRec.alternatives || []).map((alt: any) => ({
+            title: alt.title,
+            rationale: alt.rationale,
+            tradeoffs: alt.tradeoffs,
+        })),
+        impact: {
+            cashFlowImpact: domainRec.financialImpact?.cashFlowImpact?.amount || 0,
+            wealthIncrease: domainRec.financialImpact?.wealthIncrease?.amount || 0,
+            debtReduction: domainRec.financialImpact?.debtReduction?.amount || 0,
+            timeframeMonths: domainRec.financialImpact?.timeframeMonths,
+        },
+        assumptions: (domainRec.assumptions || []).map((a: any) => ({
+            value: a.value,
+            sensitivity: a.sensitivity,
+        })),
+        risks: (domainRec.risks || []).map((r: any) => ({
+            description: r.description,
+            severity: r.severity,
+            impact: r.impact,
+        })),
+        evidence: (domainRec.evidence || []).map((e: any) => ({
+            claim: e.claim,
+            sourceName: e.sourceName,
+            sourceUrl: e.sourceUrl,
+            retrievalDate: e.retrievalDate instanceof Date
+                ? e.retrievalDate.toISOString()
+                : String(e.retrievalDate),
+        })),
+        // CRITICAL-2: Validation comes from domain, never hardcoded
+        validation: domainRec.validation
+            ? {
+                status: domainRec.validation.status,
+                summary: domainRec.validation.summary,
+                details: (domainRec.validation.details || []).map((d: any) => ({
+                    category: d.category,
+                    status: d.status,
+                    description: d.description,
+                })),
+            }
+            : {
+                status: "INSUFFICIENT_INFORMATION",
+                summary: "Recommendation validation is incomplete",
+                details: [],
+            },
+        // CRITICAL-2: Confidence comes from domain, based on data quality + validation
+        confidence: domainRec.confidence,
+        confidenceReasoning: domainRec.confidenceReasoning || "",
+        approvalRequired: domainRec.approvalRequired ?? true,
+    };
+}
+
+/**
  * Register orchestrator routes
  */
 export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext) => {
@@ -281,7 +341,10 @@ export const registerOrchestratorRoutes: RouteRegistrar = (context: RouteContext
                     success: orchestratorResponse.success,
                     failureCategory: orchestratorResponse.metadata.failureCategory,
                     retryable: orchestratorResponse.metadata.retryable ?? false,
-                    recommendation: orchestratorResponse.recommendation,
+                    // CRITICAL-2: Transform recommendation with domain-provided validation and confidence
+                    recommendation: orchestratorResponse.recommendation
+                        ? toStructuredRecommendation(orchestratorResponse.recommendation)
+                        : undefined,
                     metadata: {
                         workflowType: orchestratorResponse.metadata.workflowType,
                         toolsExecuted: orchestratorResponse.metadata.toolsExecuted,

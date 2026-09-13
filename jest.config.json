@@ -9,7 +9,9 @@
         "**/?(*.)+(spec|test).ts"
     ],
     "testPathIgnorePatterns": [
+        "/apps/web/e2e/",
         "/e2e/",
+        "/tests/integration/",
         "/node_modules/"
     ],
     "moduleNameMapper": {

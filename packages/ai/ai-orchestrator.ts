@@ -60,6 +60,7 @@ import {
     resolveAdvisorStyle,
     OrchestratedRecommendationWorkflow,
 } from "./recommendation-workflow";
+import { orchestrateRecommendation, OrchestrationResult } from "./recommendation-orchestrator";
 import { buildDecisionJournalEntry } from "./decision-journal";
 
 /**
@@ -302,20 +303,48 @@ export class AIOrchestrator {
                     })),
                 },
             };
-            const recommendationWorkflow = isRecommendationWorkflow(request.workflowType, researchRequirement)
-                ? buildToolBackedRecommendationWorkflow({
+
+            // CRITICAL-1: Use typed recommendation pipeline instead of direct workflow building
+            let recommendationResult: OrchestrationResult | undefined;
+            let recommendationWorkflow: OrchestratedRecommendationWorkflow | undefined;
+
+            if (isRecommendationWorkflow(request.workflowType, researchRequirement)) {
+                // Orchestrate full pipeline: scenarios → candidates → validation → selection
+                recommendationResult = await orchestrateRecommendation(
                     toolResults,
-                    researchRequirement,
                     research,
-                    workflowType: request.workflowType,
-                    userMessage: continuity.resolvedMessage,
-                    householdId: request.householdId,
-                    memberId: request.memberId,
-                    conversationId: request.conversationId,
-                    policyVersion: request.householdPolicyVersion ?? 1,
-                })
-                : undefined;
-            if (recommendationWorkflow && !recommendationWorkflow.finalRecommendation) {
+                    request.workflowType,
+                    continuity.resolvedMessage,
+                    request.householdId,
+                    request.memberId,
+                    request.conversationId,
+                    request.householdPolicyVersion ?? 1,
+                    researchRequirement
+                );
+
+                // If orchestration succeeded, also build workflow for journal recording
+                if (recommendationResult.recommendation) {
+                    recommendationWorkflow = buildToolBackedRecommendationWorkflow({
+                        toolResults,
+                        researchRequirement,
+                        research,
+                        workflowType: request.workflowType,
+                        userMessage: continuity.resolvedMessage,
+                        householdId: request.householdId,
+                        memberId: request.memberId,
+                        conversationId: request.conversationId,
+                        policyVersion: request.householdPolicyVersion ?? 1,
+                    });
+                }
+            } else {
+                recommendationResult = {
+                    recommendation: null,
+                    validationStatus: "INSUFFICIENT_INFORMATION",
+                };
+            }
+
+            // CRITICAL-1: Validation MUST pass before delivery
+            if (recommendationResult && !recommendationResult.recommendation) {
                 return this.buildFailureResponse(
                     request,
                     plan,
@@ -392,7 +421,8 @@ export class AIOrchestrator {
                 [...research.evidence, ...historicalEvidence]
             );
 
-            if (recommendationWorkflow?.finalRecommendation && !validated.groundingPassed) {
+            // CRITICAL-3: Grounding failure must be recorded and handled consistently
+            if (recommendationResult?.recommendation && !validated.groundingPassed) {
                 return this.buildFailureResponse(
                     request,
                     plan,
@@ -427,26 +457,30 @@ export class AIOrchestrator {
             // Step 10: Build final orchestrator response
             const llmProviderInfo = this.getLLMProviderInfo();
             const totalDurationMs = Date.now() - startTime;
-            const decisionJournalEntry = recommendationWorkflow?.finalRecommendation
-                ? buildDecisionJournalEntry({
-                    request,
-                    toolResults,
-                    evidence: research.evidence,
-                    workflow: recommendationWorkflow,
-                    presentedRecommendation: assistantMessage,
-                    groundingPassed: validated.groundingPassed,
-                    groundingViolations: validated.violations.map((violation) => violation.type),
-                    advisorStyle,
-                    generatedAt: new Date(),
-                })
-                : undefined;
+
+            // CRITICAL-1: Record full workflow in journal when recommendation is delivered
+            const decisionJournalEntry =
+                recommendationResult?.recommendation && recommendationWorkflow
+                    ? buildDecisionJournalEntry({
+                        request,
+                        toolResults,
+                        evidence: research.evidence,
+                        workflow: recommendationWorkflow,
+                        presentedRecommendation: assistantMessage,
+                        groundingPassed: validated.groundingPassed,
+                        groundingViolations: validated.violations.map((violation) => violation.type),
+                        advisorStyle,
+                        generatedAt: new Date(),
+                    })
+                    : undefined;
+
             return {
                 correlationId: request.correlationId,
                 assistantMessage,
                 toolResults,
                 success: true,
                 decisionJournalEntry,
-                recommendation: recommendationWorkflow?.finalRecommendation,
+                recommendation: recommendationResult?.recommendation ?? undefined,
                 metadata: {
                     workflowType: request.workflowType,
                     toolsExecuted: toolResults.filter(r => r.success).length,

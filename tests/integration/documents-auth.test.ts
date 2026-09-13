@@ -7,7 +7,7 @@ import { describe, test, expect, beforeAll, afterAll } from "@jest/globals";
 import request from "supertest";
 import { v4 as uuidv4 } from "uuid";
 import { createServer } from "../../apps/api/src/server";
-import { query } from "../../apps/api/src/db/connection";
+import { query, closeConnection } from "../../apps/api/src/db/connection";
 import { EntityId } from "@house-fin/contracts";
 
 declare module "expect" {
@@ -35,6 +35,7 @@ afterAll(async () => {
     for (const id of createdHouseholdIds) {
         await query("DELETE FROM finhouse.households WHERE id = $1", [id]);
     }
+    await closeConnection();
 });
 
 describe("Document Authorization", () => {

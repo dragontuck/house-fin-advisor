@@ -6,7 +6,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { EntityId, DocumentProcessingStatus, DocumentSourceType } from "@house-fin/contracts";
 import { PgFinancialDocumentRepository } from "../../apps/api/src/db/repositories";
-import { query } from "../../apps/api/src/db/connection";
+import { query, closeConnection } from "../../apps/api/src/db/connection";
 
 describe("PgFinancialDocumentRepository", () => {
     const repo = new PgFinancialDocumentRepository();
@@ -26,6 +26,7 @@ describe("PgFinancialDocumentRepository", () => {
     afterAll(async () => {
         // Cleanup: Delete test household (cascades to documents)
         await query("DELETE FROM finhouse.households WHERE id = $1", [testHouseholdId]);
+        await closeConnection();
     });
 
     describe("create", () => {

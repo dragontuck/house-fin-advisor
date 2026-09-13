@@ -436,14 +436,8 @@ test.describe("Household with goal falling behind", () => {
 
 test.describe("Financial Pulse Dashboard", () => {
     test.beforeEach(async ({ page }) => {
-        // Mock the API endpoint using route.fulfill
-        await page.route("**/api/financial-pulse", (route) => {
-            route.fulfill({
-                status: 200,
-                contentType: "application/json",
-                body: JSON.stringify(mockPulseData),
-            });
-        });
+        // Mock all APIs with default pulse data
+        await mockAllApis(page);
     });
 
     test("should display household name and update date", async ({ page }) => {

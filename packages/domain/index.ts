@@ -538,6 +538,16 @@ export {
     type PurchaseScenarioInput,
 } from "./purchase-scenario-service";
 
+// ── Financial Simulation ──────────────────────────────────────────────────────
+// Deterministic scenario calculations for purchases and financing
+export {
+    FinancialSimulator,
+    createFinancialSimulator,
+    type HouseholdFinancialPolicy,
+    type PurchaseSimulationResult,
+    type FinancingSimulationResult,
+} from "./financial-simulator";
+
 // ── Slice 5: Candidate Recommendation Generation ─────────────────────────────
 // Generate candidate recommendations from scenarios and policy
 export {
@@ -573,3 +583,9 @@ export {
     presentRecommendation,
     verifyFinancialDataUnchanged,
 } from "./recommendation-presenter";
+
+// ── Slice 5: Evidence Relevance Checking ────────────────────────────────
+// Verify that research evidence actually supports the claimed fact
+export {
+    EvidenceRelevanceChecker,
+} from "./evidence-relevance-checker";

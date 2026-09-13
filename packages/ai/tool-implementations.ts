@@ -28,6 +28,8 @@ import {
     calculatePurchaseScenario,
     createBudgetService,
     createCashFlowService,
+    FinancialSimulator,
+    createFinancialSimulator,
 } from "@house-fin/domain";
 import {
     CreateInitialBudgetOutput,
@@ -39,9 +41,6 @@ import {
     NextMonthBudgetProposal,
     VarianceTrend,
 } from "@house-fin/contracts";
-
-/** Household policy input used by the purchase scenario domain service. */
-const EMERGENCY_FUND_MINIMUM_MONTHS = 3;
 
 /**
  * Dependencies required by all tools
@@ -101,6 +100,7 @@ export interface ToolDependencies {
  * Simulates the financial impact of a one-time purchase against the household's
  * latest snapshot (liquid cash) and settings (monthly essential expenses).
  * Deterministic: same snapshot + inputs always produce the same result.
+ * Uses FinancialSimulator from domain for all calculations.
  * ──────────────────────────────────────────────────────────────────────────────
  */
 export async function simulatePurchase(
@@ -113,23 +113,61 @@ export async function simulatePurchase(
 ): Promise<SimulatePurchaseOutput> {
     try {
         const snapshot = deps.snapshotRepo ? await deps.snapshotRepo.findLatestByHouseholdId(householdId) : null;
-        const settings = await deps.settingsRepo.findByHouseholdId(householdId);
 
-        const currentLiquidCashCents = (snapshot?.cash ?? 0) as Money;
-        const essentialExpensesCents = (settings?.monthlyEssentialExpenses ?? snapshot?.monthlyEssentialExpenses ?? 0) as Money;
-        const monthlySurplusCents = (snapshot?.monthlySurplus ?? 0) as Money;
+        if (!snapshot) {
+            return {
+                householdId,
+                scenario: { purchaseAmountCents, paymentMethod, description },
+                projectedImpact: {
+                    currentLiquidCashCents: 0 as Money,
+                    projectedLiquidCashCents: 0 as Money,
+                    affectsCashPosition: false,
+                    affectsDebtLevel: false,
+                    affectsEmergencyFund: false,
+                },
+                recommendations: [],
+                isAffordable: false,
+                error: "No financial snapshot available for this household",
+            };
+        }
 
-        return calculatePurchaseScenario({
+        // Map old payment method names to domain payment methods
+        const paymentMethodMap: Record<string, "cash" | "credit" | "loan"> = {
+            CASH: "cash",
+            SAVINGS: "cash",
+            CREDIT_CARD: "credit",
+            LOAN: "loan",
+        };
+        const domainPaymentMethod = paymentMethodMap[paymentMethod] ?? "credit";
+
+        // Create simulator with default policy
+        const simulator = createFinancialSimulator();
+
+        // Simulate the purchase
+        const result = simulator.simulatePurchase(snapshot, purchaseAmountCents, domainPaymentMethod);
+
+        // Determine affected areas
+        const paysFromCash = domainPaymentMethod === "cash";
+        const affectsDebt = domainPaymentMethod === "credit" || domainPaymentMethod === "loan";
+
+        return {
             householdId,
-            purchaseAmountCents,
-            paymentMethod,
-            description,
-            currentLiquidCashCents,
-            monthlyEssentialExpensesCents: essentialExpensesCents,
-            monthlySurplusCents,
-            emergencyFundMinimumMonths: EMERGENCY_FUND_MINIMUM_MONTHS,
-            category: options?.category,
-        });
+            scenario: {
+                purchaseAmountCents,
+                paymentMethod,
+                description,
+            },
+            projectedImpact: {
+                currentLiquidCashCents: result.currentCashCents,
+                projectedLiquidCashCents: result.projectedCashCents,
+                affectsCashPosition: paysFromCash,
+                affectsDebtLevel: affectsDebt,
+                affectsEmergencyFund: paysFromCash,
+                budgetImpactCategory: options?.category,
+            },
+            recommendations: result.reason ? [result.reason] : [],
+            isAffordable: result.affordable,
+        };
     } catch (error) {
         return {
             householdId,
