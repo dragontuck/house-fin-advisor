@@ -1,8 +1,7 @@
 /**
  * Household context middleware
  * Extracts and validates household context from requests
- * For Slice 1: Uses hardcoded household ID
- * For Slice 2: Will be replaced to extract from JWT/auth context
+ * Integrated with Keycloak authentication
  */
 
 import { Request, Response, NextFunction } from "express";
@@ -10,19 +9,40 @@ import { EntityId } from "@house-fin/contracts";
 
 /**
  * Middleware to extract and attach household context
- * Currently uses hardcoded household ID for Slice 1
- * Will be updated in Slice 2 to extract from JWT claims
+ * Extracts household ID from Keycloak token claims or header
+ * Falls back to header value if token claim is not available
  */
 export function householdContextMiddleware(
     req: Request,
     res: Response,
     next: NextFunction
 ): void {
-    // Slice 1: householdId already set by correlation middleware
-    // In Slice 2, this will extract from JWT claims and potentially override
+    // Get household ID from different sources in order of preference:
+    // 1. From Keycloak token (if authenticated)
+    // 2. From x-household-id header
+    // 3. Already set by correlation middleware (fallback)
 
-    // For now, ensure isAuthorized is set
-    req.context.isAuthorized = true; // Slice 1: always authorized
+    if (req.keycloakToken) {
+        // Try to get household ID from token custom claims
+        const householdIdFromToken =
+            (req.keycloakToken as any).household_id ||
+            (req.keycloakToken as any).householdId;
+
+        if (householdIdFromToken) {
+            req.context.householdId = householdIdFromToken as EntityId;
+        }
+
+        // Mark as authenticated
+        req.context.isAuthorized = true;
+    } else {
+        // No Keycloak token - check if header-based household ID is provided
+        // This allows for development/testing scenarios
+        const headerHouseholdId = req.headers["x-household-id"] as string;
+        if (headerHouseholdId) {
+            req.context.householdId = headerHouseholdId as EntityId;
+            req.context.isAuthorized = true;
+        }
+    }
 
     next();
 }

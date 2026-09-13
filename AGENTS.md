@@ -43,8 +43,11 @@ This project uses existing shared infrastructure (not Docker containers):
 
 **Keycloak (OAuth/OIDC)**
 - URL: https://keycloak.keystone.internal:7443/
-- Realm: house-fin
-
+- Realm: home-fin
+- api client: home-fin-api
+  - secret: cKlVAAJK7irs6H54QFbWPXgcKN60nJbZsIiHYZr9xh3AOZ6q2VHF7oL0pyaacz9aUCDf2raKkSL8Yjqa0dynwD
+- web client: home-fin-web
+  - secret: rIB2c3gKmOr9bubmGE53EatZCZOfH7wjDJ81fjD2jz04pGcWJIU06s9LuOPGqxEA5ai8RKnZW14KmQr0HQdJcm
 **Redis (Cache)**
 - Host: localhost
 - Port: 6379
@@ -114,4 +117,14 @@ Every AI tool requires contract tests.
 place working and output documents into the folder .\docs
 
 ## Agents
-- Minimize token usage and the number of rework
+- Minimize token usage and the number of rework.
+- **Two-Phase Test Generation:**
+  - **Phase 1 (Planning):** Generate a text-only test case matrix before generating code. Do not output code until the matrix is approved or explicit execution is requested.
+  - **Phase 2 (Implementation):** Require existing fixtures/factories. Import shared test helpers rather than declaring inline mock objects.
+- **Scope & Output Restrictions:**
+  - Never rewrite or output unchanged source/test code files; stream back only modified or target test functions.
+  - Assert state and domain outputs—do not assert internal implementation details or private methods.
+- **Circuit-Breaker Repair Strategy:**
+  - Limit automated fixing attempts to a maximum of 1 retry iteration.
+  - Pass only stack traces or specific failed test blocks, not entire source/test files.
+  - If a test fails twice, stop generation and identify the root cause (test assertion, mock setup, or source bug) in 2 sentences.

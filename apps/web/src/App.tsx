@@ -15,6 +15,7 @@ import {
     fetchSnapshotHistory,
     fetchBudgetVarianceHistory,
 } from "./api";
+import { useAuth } from "./auth/useAuth";
 import HouseholdHeader from "./components/HouseholdHeader";
 import StatusBanner from "./components/StatusBanner";
 import AttentionSection from "./components/AttentionSection";
@@ -26,9 +27,12 @@ import TrendsSection from "./components/TrendsSection";
 import StatementUpload from "./components/StatementUpload";
 import AdvisorSection from "./components/Advisor/AdvisorSection";
 import AdvisorErrorBoundary from "./components/Advisor/AdvisorErrorBoundary";
+import { UserMenu } from "./components/Auth/UserMenu";
+import { AuthLoading } from "./components/Auth/AuthLoading";
 import "./App.css";
 
 function App() {
+    const { isLoading: isAuthLoading, isAuthenticated } = useAuth();
     const [pulse, setPulse] = useState<FinancialPulseData | null>(null);
     const [health, setHealth] = useState<HealthSummary | null>(null);
     const [budget, setBudget] = useState<BudgetResultSet | null>(null);
@@ -40,9 +44,31 @@ function App() {
     const [error, setError] = useState<string | null>(null);
     const [showUpload, setShowUpload] = useState(false);
 
+    // Wait for authentication to initialize
     useEffect(() => {
-        loadAll();
-    }, []);
+        if (!isAuthLoading) {
+            loadAll();
+        }
+    }, [isAuthLoading]);
+
+    // Show loading screen while authentication is initializing
+    if (isAuthLoading) {
+        return <AuthLoading />;
+    }
+
+    // Redirect to login if not authenticated
+    if (!isAuthenticated) {
+        return (
+            <div className="error">
+                <div className="error-box">
+                    <div className="error-title">Authentication Required</div>
+                    <div className="error-message">
+                        Please log in to access the financial advisor.
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     const loadAll = async () => {
         try {
@@ -103,6 +129,10 @@ function App() {
 
     return (
         <div className="app">
+            <div className="app-header">
+                <div className="app-header-title">Financial Advisor</div>
+                <UserMenu />
+            </div>
             <div className="app-container dashboard">
                 <HouseholdHeader name={pulse.householdName} asOf={pulse.asOf} />
                 <div className="section-controls">

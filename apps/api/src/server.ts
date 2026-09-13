@@ -105,6 +105,9 @@ import {
 } from "./db/repositories";
 import { householdContextMiddleware, verifyHouseholdContext } from "./middleware/household-context";
 import { uploadRateLimiter } from "./middleware/rate-limit";
+import { keycloakAuthMiddleware, keycloakOptionalAuth } from "./auth/keycloak-middleware";
+import { createKeycloakUserSyncService } from "./auth/keycloak-sync";
+import { createKeycloakSyncMiddleware } from "./auth/keycloak-sync-middleware";
 import { ObjectStorageAdapter, createObjectStorageAdapter } from "./storage/object-storage";
 import { getDocumentProcessingQueue, enqueueDocumentProcessing, closeDocumentProcessingQueue, getQueueStats } from "./queue/queue";
 import { registerDocumentProcessingWorker } from "./queue/document-processor";
@@ -172,24 +175,31 @@ export function createServer(): Express {
 
     // Middleware: Add correlation ID and request context
     app.use((req: Request, res: Response, next: NextFunction) => {
-        // Slice 1: Use hardcoded household ID or from header if provided
-        const SLICE_1_HOUSEHOLD_ID = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
+        // Use default household ID or from header if provided
+        const DEFAULT_HOUSEHOLD_ID = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
         const headerHouseholdId = req.headers["x-household-id"] as string;
 
         req.context = {
             correlationId: req.headers["x-correlation-id"] as string || uuidv4(),
-            householdId: (headerHouseholdId || SLICE_1_HOUSEHOLD_ID) as EntityId,
+            householdId: (headerHouseholdId || DEFAULT_HOUSEHOLD_ID) as EntityId,
         };
         res.setHeader("x-correlation-id", req.context.correlationId);
         next();
     });
 
-    // Middleware: Extract household context (hardcoded for Slice 1, will be auth-based in Slice 2)
+    // Middleware: Keycloak authentication (optional - token present in Authorization header)
+    app.use(keycloakOptionalAuth);
+
+    // Middleware: Extract household context from Keycloak token or header
     app.use(householdContextMiddleware);
 
     // Initialize domain services
     const householdRepo = new PgHouseholdRepository();
     const memberRepo = new PgHouseholdMemberRepository();
+
+    // Initialize Keycloak user sync service
+    const keycloakUserSyncService = createKeycloakUserSyncService(memberRepo);
+    app.use(createKeycloakSyncMiddleware(keycloakUserSyncService));
     const accountRepo = new PgAccountRepository();
     const snapshotRepo = new PgFinancialSnapshotRepository();
     const settingsRepo = new PgHouseholdSettingsRepository();
