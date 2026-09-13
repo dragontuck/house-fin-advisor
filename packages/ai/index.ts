@@ -142,6 +142,14 @@ export {
 } from "./anthropic-research-provider";
 
 export {
+    OpenAIResearchProvider,
+} from "./openai-research-provider";
+
+export {
+    GeminiResearchProvider,
+} from "./gemini-research-provider";
+
+export {
     RESEARCH_ALLOWLIST,
     isResearchAllowed,
     getAllowedSourcesForClaim,

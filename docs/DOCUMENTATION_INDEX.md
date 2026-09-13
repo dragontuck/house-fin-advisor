@@ -29,6 +29,11 @@
 - **Tests**: [`tests/financial/calculations.test.ts`](tests/financial/calculations.test.ts)
 - **Database**: [`packages/db/migrations/`](packages/db/migrations/)
 
+### 🏗️ I'm Building a New Feature (Onboarding)
+- **Product Design**: [`product/HOUSEHOLD_ONBOARDING_FEATURE.md`](product/HOUSEHOLD_ONBOARDING_FEATURE.md) (30 minutes)
+- **Implementation Plan**: [`product/HOUSEHOLD_ONBOARDING_IMPLEMENTATION_PLAN.md`](product/HOUSEHOLD_ONBOARDING_IMPLEMENTATION_PLAN.md) (60 minutes)
+- **All Product Docs**: [`product/README.md`](product/README.md)
+
 ---
 
 ## Documentation Structure
@@ -56,6 +61,29 @@
 |------|---------|-----------------|
 | [`README.md`](README.md) | Project overview | Vision, features, architecture diagram |
 | [`AGENTS.md`](AGENTS.md) | Privacy & architectural rules | Requirements from original spec |
+
+---
+
+## 📋 Product Features & Roadmap
+
+### Current Features
+
+| Feature | Status | Documentation |
+|---------|--------|---|
+| **Financial Pulse** | ✅ Complete | [`IMPLEMENTATION_COMPLETE.md`](IMPLEMENTATION_COMPLETE.md) |
+| **Budget Planning** | ✅ Complete | Implementation docs |
+| **Debt Intelligence** | ✅ Complete | Implementation docs |
+| **AI Advisor** | ✅ Complete | [`AI_TOOL_LAYER_ARCHITECTURE.md`](AI_TOOL_LAYER_ARCHITECTURE.md) |
+| **Statement Upload** | ✅ Complete | [`DELIVERABLES.md`](DELIVERABLES.md) |
+
+### Upcoming Features (Designed, Ready for Implementation)
+
+| Feature | Status | Lead Document | Read Time |
+|---------|--------|---|---|
+| **🏠 Household Onboarding** | 📋 Designed | [`product/HOUSEHOLD_ONBOARDING_FEATURE.md`](product/HOUSEHOLD_ONBOARDING_FEATURE.md) | 30 min |
+| | | Implementation Plan: [`product/HOUSEHOLD_ONBOARDING_IMPLEMENTATION_PLAN.md`](product/HOUSEHOLD_ONBOARDING_IMPLEMENTATION_PLAN.md) | 60 min |
+
+**All Product Docs:** [`product/README.md`](product/README.md)
 
 ---
 
