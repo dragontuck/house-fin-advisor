@@ -4,7 +4,7 @@ const port = process.env.PLAYWRIGHT_PORT ?? "5173";
 const baseURL = `http://localhost:${port}`;
 
 export default defineConfig({
-    testDir: "./e2e",
+    testDir: "./playwright/e2e",
     fullyParallel: true,
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,
