@@ -15,7 +15,8 @@ interface Phase5ProfileProps {
 }
 
 export const Phase5Profile: React.FC<Phase5ProfileProps> = ({ onNext }) => {
-    const [members, setMembers] = useState<HouseholdMember[]>([]);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const [members, _setMembers] = useState<HouseholdMember[]>([]);
     const [privacyConfirmed, setPrivacyConfirmed] = useState(false);
     const [budgetAlerts, setBudgetAlerts] = useState(true);
     const [milestones, setMilestones] = useState(true);

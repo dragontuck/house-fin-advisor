@@ -11,10 +11,9 @@ interface ActionBarProps {
     phase: OnboardingPhase;
     onCancel?: () => void;
     onSaveCheckpoint?: () => void;
-    allPhases?: Record<OnboardingPhase, any>;
 }
 
-export const ActionBar: React.FC<ActionBarProps> = ({ phase, onCancel, onSaveCheckpoint, allPhases }) => {
+export const ActionBar: React.FC<ActionBarProps> = ({ phase, onCancel, onSaveCheckpoint }) => {
     const canSkip = phase < 6;
     const canGoBack = phase > 1;
 

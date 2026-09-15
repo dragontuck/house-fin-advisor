@@ -5,6 +5,7 @@
  * Manages progress indicator, phase content, and action buttons.
  */
 
+import React, { useState } from 'react';
 import { OnboardingProgress } from '@house-fin/domain/types/onboarding.types';
 
 export interface OnboardingLayoutProps {
@@ -16,22 +17,27 @@ export interface OnboardingLayoutProps {
     /**
      * Current phase component to display
      */
-    phaseComponent: React.ReactNode;
+    phaseComponent?: React.ReactNode;
 
     /**
      * Callback when user clicks Next
      */
-    onNext: () => void;
+    onNext?: () => void;
 
     /**
      * Callback when user clicks Back
      */
-    onBack: () => void;
+    onBack?: () => void;
 
     /**
      * Callback when user clicks Skip
      */
     onSkip?: () => void;
+
+    /**
+     * Reason why skip is disabled (shown in tooltip)
+     */
+    skipDisabledReason?: string | null;
 
     /**
      * Callback when user clicks Save Checkpoint
@@ -57,6 +63,16 @@ export interface OnboardingLayoutProps {
      * Error message if present
      */
     error?: string | null;
+
+    /**
+     * Callback when user cancels onboarding
+     */
+    onCancel?: () => void;
+
+    /**
+     * Children to render as phase content
+     */
+    children?: React.ReactNode;
 }
 
 /**
@@ -68,12 +84,18 @@ export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
     onNext,
     onBack,
     onSkip,
+    skipDisabledReason,
     onSaveCheckpoint,
     isNextDisabled = false,
     isBackDisabled = false,
     isLoading = false,
     error,
+    onCancel,
+    children,
 }) => {
+    const [showSkipTooltip, setShowSkipTooltip] = useState(false);
+    const canSkip = onSkip && !skipDisabledReason;
+
     return (
         <div className="onboarding-layout">
             {/* Progress Indicator */}
@@ -101,28 +123,56 @@ export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
                 {isLoading ? (
                     <div className="loading-spinner">Loading...</div>
                 ) : (
-                    phaseComponent
+                    children || phaseComponent
                 )}
             </main>
 
             {/* Action Bar */}
             <footer className="action-bar">
-                <button
-                    className="btn btn-secondary"
-                    onClick={onBack}
-                    disabled={isBackDisabled || isLoading}
-                >
-                    ← Back
-                </button>
+                {onCancel && (
+                    <button
+                        className="btn btn-secondary"
+                        onClick={onCancel}
+                        disabled={isLoading}
+                        title="Cancel onboarding"
+                    >
+                        ✕ Cancel
+                    </button>
+                )}
+
+                {onBack && (
+                    <button
+                        className="btn btn-secondary"
+                        onClick={onBack}
+                        disabled={isBackDisabled || isLoading}
+                        title="Go to previous phase"
+                    >
+                        ← Back
+                    </button>
+                )}
+
+                <div className="action-spacer" />
 
                 {onSkip && (
-                    <button
-                        className="btn btn-tertiary"
-                        onClick={onSkip}
-                        disabled={isLoading}
+                    <div
+                        className="skip-button-wrapper"
+                        onMouseEnter={() => skipDisabledReason && setShowSkipTooltip(true)}
+                        onMouseLeave={() => setShowSkipTooltip(false)}
+                        title={skipDisabledReason || 'Skip this phase'}
                     >
-                        Skip Phase
-                    </button>
+                        <button
+                            className="btn btn-tertiary"
+                            onClick={onSkip}
+                            disabled={!canSkip || isLoading}
+                        >
+                            ⊘ Skip Phase
+                        </button>
+                        {showSkipTooltip && skipDisabledReason && (
+                            <div className="tooltip">
+                                {skipDisabledReason}
+                            </div>
+                        )}
+                    </div>
                 )}
 
                 {onSaveCheckpoint && (
@@ -130,18 +180,22 @@ export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
                         className="btn btn-tertiary"
                         onClick={onSaveCheckpoint}
                         disabled={isLoading}
+                        title="Save your progress locally"
                     >
                         💾 Save Progress
                     </button>
                 )}
 
-                <button
-                    className="btn btn-primary"
-                    onClick={onNext}
-                    disabled={isNextDisabled || isLoading}
-                >
-                    Next →
-                </button>
+                {onNext && (
+                    <button
+                        className="btn btn-primary"
+                        onClick={onNext}
+                        disabled={isNextDisabled || isLoading}
+                        title="Continue to next phase"
+                    >
+                        Next →
+                    </button>
+                )}
             </footer>
         </div>
     );
