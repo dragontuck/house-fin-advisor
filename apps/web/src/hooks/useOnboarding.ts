@@ -14,16 +14,16 @@ import {
     ValidationError,
     IncomeDetection,
     ExpenseDetection,
-} from '../../../packages/domain/types/onboarding.types';
-import { EntityId } from '../../../packages/domain/types/common.types';
+} from '@house-fin/domain/types/onboarding.types';
+import { EntityId } from '@house-fin/domain/types/common.types';
 
 /**
  * Main onboarding hook - manages current progress, phase navigation, and state
  */
 export function useOnboarding(householdId: EntityId) {
-    const [progress, setProgress] = useState<OnboardingProgress | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [progress, _setProgress] = useState<OnboardingProgress | null>(null);
+    const [isLoading, _setIsLoading] = useState(false);
+    const [_error, _setError] = useState<string | null>(null);
 
     // Fetch current progress
     useEffect(() => {
@@ -32,25 +32,25 @@ export function useOnboarding(householdId: EntityId) {
     }, [householdId]);
 
     // Start onboarding
-    const start = async (householdName: string) => {
+    const start = async (_householdName: string) => {
         // TODO: Implement in Phase 2
         throw new Error('Not implemented');
     };
 
     // Move to next phase
-    const moveToPhase = async (phaseNumber: OnboardingPhase) => {
+    const moveToPhase = async (_phaseNumber: OnboardingPhase) => {
         // TODO: Implement in Phase 2
         throw new Error('Not implemented');
     };
 
     // Complete current phase
-    const completePhase = async (data: Record<string, unknown>) => {
+    const completePhase = async (_data: Record<string, unknown>) => {
         // TODO: Implement in Phase 2
         throw new Error('Not implemented');
     };
 
     // Skip phase
-    const skipPhase = async (targetPhase: OnboardingPhase) => {
+    const skipPhase = async (_targetPhase: OnboardingPhase) => {
         // TODO: Implement in Phase 2
         throw new Error('Not implemented');
     };
@@ -64,7 +64,6 @@ export function useOnboarding(householdId: EntityId) {
     return {
         progress,
         isLoading,
-        error,
         start,
         moveToPhase,
         completePhase,
@@ -76,42 +75,40 @@ export function useOnboarding(householdId: EntityId) {
 /**
  * Hook for form data persistence via checkpoints
  */
-export function useFormProgress(phaseNumber: OnboardingPhase, initialData: Record<string, unknown> = {}) {
+export function useFormProgress(_phaseNumber: OnboardingPhase, initialData: Record<string, unknown> = {}) {
     const [data, setData] = useState(initialData);
-    const [isSaving, setIsSaving] = useState(false);
+    const [_isSaving, _setIsSaving] = useState(false);
 
     // Auto-save to checkpoint on changes (with debounce)
     useEffect(() => {
         // TODO: Implement in Phase 2 with debounce
-    }, [data, phaseNumber]);
+    }, [data, _phaseNumber]);
 
     return {
         data,
         setData,
-        isSaving,
     };
 }
 
 /**
  * Hook for statement collection status and upload guidance
  */
-export function useStatementGuidance(accountId: EntityId) {
-    const [guidance, setGuidance] = useState<{
+export function useStatementGuidance(_accountId: EntityId) {
+    const [_guidance, _setGuidance] = useState<{
         minMonths: number;
         maxMonths: number;
         formats: string[];
         institutionUrl?: string;
         exampleUrl?: string;
     } | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, _setIsLoading] = useState(false);
 
     useEffect(() => {
         // TODO: Implement in Phase 2
         // Fetch /api/onboarding/accounts/:accountId/guidance
-    }, [accountId]);
+    }, [_accountId]);
 
     return {
-        guidance,
         isLoading,
     };
 }
@@ -119,17 +116,17 @@ export function useStatementGuidance(accountId: EntityId) {
 /**
  * Hook for income detection
  */
-export function useIncomeDetection(householdId: EntityId) {
-    const [detections, setDetections] = useState<IncomeDetection[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+export function useIncomeDetection(_householdId: EntityId) {
+    const [detections, _setDetections] = useState<IncomeDetection[]>([]);
+    const [isLoading, _setIsLoading] = useState(false);
+    const [error, _setError] = useState<string | null>(null);
 
     const detect = async () => {
         // TODO: Implement in Phase 2
         throw new Error('Not implemented');
     };
 
-    const confirm = async (confirmedAmount?: number) => {
+    const confirm = async (_confirmedAmount?: number) => {
         // TODO: Implement in Phase 2
         throw new Error('Not implemented');
     };
@@ -146,17 +143,17 @@ export function useIncomeDetection(householdId: EntityId) {
 /**
  * Hook for expense detection
  */
-export function useExpenseDetection(householdId: EntityId) {
-    const [detections, setDetections] = useState<ExpenseDetection[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+export function useExpenseDetection(_householdId: EntityId) {
+    const [detections, _setDetections] = useState<ExpenseDetection[]>([]);
+    const [isLoading, _setIsLoading] = useState(false);
+    const [error, _setError] = useState<string | null>(null);
 
-    const detect = async (accountIds?: EntityId[]) => {
+    const detect = async (_accountIds?: EntityId[]) => {
         // TODO: Implement in Phase 2
         throw new Error('Not implemented');
     };
 
-    const confirm = async (recordId: EntityId, confirmedAmount?: number) => {
+    const confirm = async (_recordId: EntityId, _confirmedAmount?: number) => {
         // TODO: Implement in Phase 2
         throw new Error('Not implemented');
     };
@@ -174,21 +171,20 @@ export function useExpenseDetection(householdId: EntityId) {
  * Hook for form validation
  */
 export function useFormValidation() {
-    const [errors, setErrors] = useState<ValidationError[]>([]);
-    const [isValidating, setIsValidating] = useState(false);
+    const [errors, _setErrors] = useState<ValidationError[]>([]);
+    const [_isValidating, _setIsValidating] = useState(false);
 
-    const validate = async (phaseNumber: OnboardingPhase, data: Record<string, unknown>) => {
+    const validate = async (_phaseNumber: OnboardingPhase, _data: Record<string, unknown>) => {
         // TODO: Implement in Phase 2
         throw new Error('Not implemented');
     };
 
     const clearErrors = () => {
-        setErrors([]);
+        _setErrors([]);
     };
 
     return {
         errors,
-        isValidating,
         validate,
         clearErrors,
     };
@@ -197,17 +193,17 @@ export function useFormValidation() {
 /**
  * Hook for checkpoint/resume functionality
  */
-export function useCheckpointResume(householdId: EntityId, sessionId: string) {
-    const [checkpoint, setCheckpoint] = useState<any | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
+export function useCheckpointResume(_householdId: EntityId, _sessionId: string) {
+    const [checkpoint, _setCheckpoint] = useState<any | null>(null);
+    const [isLoading, _setIsLoading] = useState(false);
 
     // Load checkpoint on mount
     useEffect(() => {
         // TODO: Implement in Phase 2
         // Fetch /api/onboarding/progress/checkpoint
-    }, [householdId, sessionId]);
+    }, [_householdId, _sessionId]);
 
-    const save = async (phaseNumber: OnboardingPhase, data: Record<string, unknown>) => {
+    const save = async (_phaseNumber: OnboardingPhase, _data: Record<string, unknown>) => {
         // TODO: Implement in Phase 2
         throw new Error('Not implemented');
     };
@@ -229,14 +225,14 @@ export function useCheckpointResume(householdId: EntityId, sessionId: string) {
  * Hook for onboarding completion stats
  */
 export function useOnboardingStats() {
-    const [stats, setStats] = useState<{
+    const [_stats, _setStats] = useState<{
         totalStarted: number;
         totalCompleted: number;
         completionRate: number;
         averageTimeMinutes: number;
         dropoffByPhase: Record<OnboardingPhase, number>;
     } | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, _setIsLoading] = useState(false);
 
     useEffect(() => {
         // TODO: Implement in Phase 2
@@ -244,7 +240,7 @@ export function useOnboardingStats() {
     }, []);
 
     return {
-        stats,
+        stats: _stats,
         isLoading,
     };
 }

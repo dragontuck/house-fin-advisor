@@ -2,8 +2,8 @@
  * Login component for Keycloak authentication
  */
 
-import React, { useState } from 'react';
-import { useAuth } from '../auth/useAuth';
+import { useState } from 'react';
+import { useAuth } from '../../auth/useAuth';
 import './AuthUI.css';
 
 export function LoginButton() {

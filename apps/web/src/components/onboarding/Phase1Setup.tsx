@@ -5,7 +5,7 @@
  */
 
 import React, { useState } from 'react';
-import { HouseholdProfileType, SetupPhaseData, ValidationError } from '../../../packages/domain/types/onboarding.types';
+import { HouseholdProfileType, SetupPhaseData, ValidationError } from '@house-fin/domain/types/onboarding.types';
 
 export interface Phase1SetupProps {
     /**
@@ -16,7 +16,7 @@ export interface Phase1SetupProps {
     /**
      * Callback when form is submitted
      */
-    onSubmit: (data: SetupPhaseData) => Promise<void>;
+    onSubmit?: (data: SetupPhaseData) => Promise<void>;
 
     /**
      * Validation errors to display
@@ -34,7 +34,7 @@ export interface Phase1SetupProps {
  */
 export const Phase1Setup: React.FC<Phase1SetupProps> = ({
     initialData,
-    onSubmit,
+    onSubmit: _onSubmit,
     errors = [],
     isLoading = false,
 }) => {

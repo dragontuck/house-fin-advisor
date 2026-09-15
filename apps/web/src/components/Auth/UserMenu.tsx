@@ -2,8 +2,8 @@
  * User menu component showing user info and logout option
  */
 
-import React, { useState } from 'react';
-import { useAuth } from '../auth/useAuth';
+import { useState } from 'react';
+import { useAuth } from '../../auth/useAuth';
 import { LogoutButton } from './LogoutButton';
 import './AuthUI.css';
 

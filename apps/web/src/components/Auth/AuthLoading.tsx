@@ -2,7 +2,6 @@
  * Loading spinner component for authentication initialization
  */
 
-import React from 'react';
 import './AuthUI.css';
 
 export function AuthLoading() {

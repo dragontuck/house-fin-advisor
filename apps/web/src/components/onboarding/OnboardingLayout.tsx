@@ -5,8 +5,7 @@
  * Manages progress indicator, phase content, and action buttons.
  */
 
-import React, { useState } from 'react';
-import { OnboardingPhase, OnboardingProgress } from '../../../packages/domain/types/onboarding.types';
+import { OnboardingProgress } from '@house-fin/domain/types/onboarding.types';
 
 export interface OnboardingLayoutProps {
     /**

@@ -3,7 +3,7 @@
  * Provides authentication state and methods throughout the app
  */
 
-import React, { createContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useState, useEffect, useCallback, ReactNode } from 'react';
 
 /**
  * User information from Keycloak token
@@ -53,7 +53,8 @@ interface KeycloakInstance {
     tokenParsed: any;
     userInfo: (success: (info: any) => void, error: (err: any) => void) => void;
     isTokenExpired: (minValidity?: number) => boolean;
-    refreshToken: () => Promise<boolean>;
+    refreshTokenFn: () => Promise<boolean>;
+    authenticated?: boolean;
 }
 
 // Type for the Keycloak singleton
@@ -77,15 +78,15 @@ async function initializeKeycloak(): Promise<KeycloakInstance> {
     });
 
     try {
-        const authenticated = await keycloak.init({
+        await keycloak.init({
             onLoad: 'login-required',
             checkLoginIframe: false, // Disable for HTTPS self-signed certificates
             flow: 'standard', // Authorization Code Flow
-            redirect_uri: window.location.href.split('?')[0],
+            redirectUri: window.location.href.split('?')[0],
         });
 
-        keycloakInstance = keycloak;
-        return keycloak;
+        keycloakInstance = keycloak as unknown as KeycloakInstance;
+        return keycloak as unknown as KeycloakInstance;
     } catch (error) {
         console.error('Keycloak initialization failed:', error);
         throw new Error('Failed to initialize authentication');
@@ -181,7 +182,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         // Check if token is expired and refresh if needed
         if (keycloakInstance.isTokenExpired(5)) {
-            keycloakInstance.refreshToken();
+            keycloakInstance.refreshTokenFn?.();
         }
 
         return keycloakInstance.token || null;
