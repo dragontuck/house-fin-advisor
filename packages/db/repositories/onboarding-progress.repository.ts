@@ -118,7 +118,7 @@ export class OnboardingProgressRepository implements IOnboardingProgressReposito
     async completePhase(
         householdId: EntityId,
         phaseNumber: OnboardingPhase,
-        data: Record<string, unknown>,
+        data: SetupPhaseData | AccountsPhaseData | StatementsPhaseData | FinancialContextPhaseData | ProfilePhaseData | LaunchPhaseData,
         userId: EntityId
     ): Promise<OnboardingProgress> {
         // TODO: Implement in Phase 2

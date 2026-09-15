@@ -5,7 +5,13 @@
  * Ensures data integrity before phase completion.
  */
 
-import { SetupPhaseData, AccountsPhaseData, StatementsPhaseData } from '../../../domain/types/onboarding.types';
+import {
+    SetupPhaseData,
+    AccountsPhaseData,
+    StatementsPhaseData,
+    HouseholdProfileType,
+    AccountType,
+} from '../../../domain/types/onboarding.types';
 
 // Validator implementations (to be implemented in domain/validators/onboarding-validators.ts)
 
@@ -113,7 +119,7 @@ describe('Phase 1: Setup Validation', () => {
     it('should validate required household name', () => {
         const invalidData: SetupPhaseData = {
             householdName: '',
-            profileType: 'FAMILY',
+            profileType: HouseholdProfileType.FAMILY,
             primaryMemberId: 'member-123' as any,
             initialInstitutions: ['Chase'],
             completedAt: undefined,
@@ -131,7 +137,7 @@ describe('Phase 1: Setup Validation', () => {
     it('should validate household name max length', () => {
         const invalidData: SetupPhaseData = {
             householdName: 'a'.repeat(256), // Exceeds max length
-            profileType: 'FAMILY',
+            profileType: HouseholdProfileType.FAMILY,
             primaryMemberId: 'member-123' as any,
             initialInstitutions: ['Chase'],
             completedAt: undefined,
@@ -168,7 +174,7 @@ describe('Phase 1: Setup Validation', () => {
     it('should require primary member ID', () => {
         const invalidData: SetupPhaseData = {
             householdName: 'Test Household',
-            profileType: 'SOLO',
+            profileType: HouseholdProfileType.SOLO,
             primaryMemberId: '' as any,
             initialInstitutions: ['Chase'],
             completedAt: undefined,
@@ -186,7 +192,7 @@ describe('Phase 1: Setup Validation', () => {
     it('should warn if no institutions selected', () => {
         const data: SetupPhaseData = {
             householdName: 'Test Household',
-            profileType: 'FAMILY',
+            profileType: HouseholdProfileType.FAMILY,
             primaryMemberId: 'member-123' as any,
             initialInstitutions: [],
             completedAt: undefined,
@@ -204,7 +210,7 @@ describe('Phase 1: Setup Validation', () => {
     it('should pass valid Phase 1 data', () => {
         const validData: SetupPhaseData = {
             householdName: 'Smith Family',
-            profileType: 'FAMILY',
+            profileType: HouseholdProfileType.FAMILY,
             primaryMemberId: 'member-123' as any,
             initialInstitutions: ['Chase', 'Bank of America'],
             completedAt: undefined,
@@ -254,7 +260,7 @@ describe('Phase 2: Accounts Declaration Validation', () => {
                 {
                     tempId: 'temp-1',
                     institution: '', // Missing institution
-                    accountType: 'CHECKING',
+                    accountType: AccountType.CHECKING,
                     nickname: 'My Checking',
                     balance: 5000,
                     currency: 'USD',
@@ -302,7 +308,7 @@ describe('Phase 2: Accounts Declaration Validation', () => {
                 {
                     tempId: 'temp-1',
                     institution: 'Chase',
-                    accountType: 'CHECKING',
+                    accountType: AccountType.CHECKING,
                     nickname: 'My Checking',
                     balance: -1000, // Negative balance
                     currency: 'USD',
@@ -326,7 +332,7 @@ describe('Phase 2: Accounts Declaration Validation', () => {
                 {
                     tempId: 'temp-1',
                     institution: 'Chase',
-                    accountType: 'CHECKING',
+                    accountType: AccountType.CHECKING,
                     nickname: 'Good Account',
                     balance: 5000,
                     currency: 'USD',
@@ -376,7 +382,7 @@ describe('Phase 2: Accounts Declaration Validation', () => {
                 {
                     tempId: 'temp-1',
                     institution: 'Chase',
-                    accountType: 'CHECKING',
+                    accountType: AccountType.CHECKING,
                     nickname: 'Chase Checking',
                     balance: 10000,
                     currency: 'USD',
@@ -384,7 +390,7 @@ describe('Phase 2: Accounts Declaration Validation', () => {
                 {
                     tempId: 'temp-2',
                     institution: 'Ally',
-                    accountType: 'SAVINGS',
+                    accountType: AccountType.SAVINGS,
                     nickname: 'Ally Savings',
                     balance: 25000,
                     currency: 'USD',
@@ -402,7 +408,7 @@ describe('Validator: Error Classification', () => {
     it('should distinguish between errors and warnings', () => {
         const data: SetupPhaseData = {
             householdName: 'Test',
-            profileType: 'SOLO',
+            profileType: HouseholdProfileType.SOLO,
             primaryMemberId: 'member-123' as any,
             initialInstitutions: [], // Warning
             completedAt: undefined,
@@ -419,7 +425,7 @@ describe('Validator: Error Classification', () => {
     it('should allow phase completion with warnings but not errors', () => {
         const dataWithWarnings: SetupPhaseData = {
             householdName: 'Test',
-            profileType: 'SOLO',
+            profileType: HouseholdProfileType.SOLO,
             primaryMemberId: 'member-123' as any,
             initialInstitutions: [], // Warning, not error
             completedAt: undefined,
@@ -435,7 +441,7 @@ describe('Validator: Error Classification', () => {
     it('should block phase completion if errors exist', () => {
         const dataWithErrors: SetupPhaseData = {
             householdName: '', // Error
-            profileType: 'SOLO',
+            profileType: HouseholdProfileType.SOLO,
             primaryMemberId: 'member-123' as any,
             initialInstitutions: [],
             completedAt: undefined,
@@ -453,7 +459,7 @@ describe('Validator: Error Messages', () => {
     it('should provide clear, actionable error messages', () => {
         const invalidData: SetupPhaseData = {
             householdName: '',
-            profileType: 'FAMILY',
+            profileType: HouseholdProfileType.FAMILY,
             primaryMemberId: 'member-123' as any,
             initialInstitutions: [],
             completedAt: undefined,
@@ -477,7 +483,7 @@ describe('Validator: Error Messages', () => {
                 {
                     tempId: 'temp-1',
                     institution: 'Chase',
-                    accountType: 'CHECKING',
+                    accountType: AccountType.CHECKING,
                     nickname: 'Test',
                     balance: 5000,
                     currency: 'USD',
@@ -485,7 +491,7 @@ describe('Validator: Error Messages', () => {
                 {
                     tempId: 'temp-2',
                     institution: '',
-                    accountType: 'CHECKING',
+                    accountType: AccountType.CHECKING,
                     nickname: 'Test',
                     balance: 5000,
                     currency: 'USD',

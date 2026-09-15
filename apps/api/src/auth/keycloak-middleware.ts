@@ -3,6 +3,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
+import { EntityId } from '@house-fin/contracts';
 import { extractTokenFromHeader, verifyKeycloakToken, KeycloakToken } from './jwt-verifier';
 
 /**
@@ -71,7 +72,7 @@ export const keycloakAuthMiddleware = async (
 
         // Also update context with user info
         if (req.context) {
-            req.context.userId = verifiedToken.sub;
+            req.context.userId = verifiedToken.sub as EntityId;
             req.context.isAuthorized = true;
         }
 
@@ -115,7 +116,7 @@ export const keycloakOptionalAuth = async (
             req.keycloakToken = verifiedToken;
 
             if (req.context) {
-                req.context.userId = verifiedToken.sub;
+                req.context.userId = verifiedToken.sub as EntityId;
                 req.context.isAuthorized = true;
             }
         }

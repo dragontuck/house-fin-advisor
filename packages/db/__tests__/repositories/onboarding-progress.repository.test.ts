@@ -43,12 +43,12 @@ class MockOnboardingProgressRepository {
             currentPhase: 1,
             currentState: OnboardingState.IN_PROGRESS,
             phases: {
-                1: { completed: false, completedAt: null, data: {} },
-                2: { completed: false, completedAt: null, data: {} },
-                3: { completed: false, completedAt: null, data: {} },
-                4: { completed: false, completedAt: null, data: {} },
-                5: { completed: false, completedAt: null, data: {} },
-                6: { completed: false, completedAt: null, data: {} },
+                1: { completed: false, completedAt: null, data: null },
+                2: { completed: false, completedAt: null, data: null },
+                3: { completed: false, completedAt: null, data: null },
+                4: { completed: false, completedAt: null, data: null },
+                5: { completed: false, completedAt: null, data: null },
+                6: { completed: false, completedAt: null, data: null },
             },
             startedAt: new Date(),
             lastActivityAt: new Date(),
@@ -74,7 +74,7 @@ class MockOnboardingProgressRepository {
     async completePhase(
         householdId: string,
         phaseNumber: number,
-        data: object,
+        data: any,
         userId: string
     ): Promise<OnboardingProgress> {
         const progress = await this.getByHouseholdId(householdId);
@@ -170,7 +170,7 @@ class MockOnboardingProgressRepository {
             progress.phases[phase] = {
                 completed: false,
                 completedAt: null,
-                data: {},
+                data: null,
             };
         }
 
@@ -380,8 +380,15 @@ describe('Onboarding Database Schema Integration Tests', () => {
     });
 
     describe('Timestamp Constraints', () => {
+        let testHouseholdId: string;
+
+        beforeEach(async () => {
+            testHouseholdId = uuidv4();
+            await repository.start(testHouseholdId, userId);
+        });
+
         it('should maintain monotonic timestamps (created < updated)', async () => {
-            const progress1 = await repository.start(householdId, userId);
+            const progress1 = await repository.start(uuidv4(), userId);
             const created1 = progress1.createdAt.getTime();
             const updated1 = progress1.updatedAt.getTime();
 
@@ -389,37 +396,37 @@ describe('Onboarding Database Schema Integration Tests', () => {
         });
 
         it('should update updatedAt when progress changes', async () => {
-            const progress1 = await repository.getByHouseholdId(householdId);
+            const progress1 = await repository.getByHouseholdId(testHouseholdId);
             const updated1 = progress1!.updatedAt.getTime();
 
             // Add small delay to ensure timestamp difference
             await new Promise((resolve) => setTimeout(resolve, 10));
 
-            const progress2 = await repository.completePhase(householdId, 1, {}, userId);
+            const progress2 = await repository.completePhase(testHouseholdId, 1, {}, userId);
             const updated2 = progress2.updatedAt.getTime();
 
             expect(updated2).toBeGreaterThanOrEqual(updated1);
         });
 
         it('should maintain immutable createdAt', async () => {
-            const progress1 = await repository.getByHouseholdId(householdId);
+            const progress1 = await repository.getByHouseholdId(testHouseholdId);
             const created1 = progress1!.createdAt.getTime();
 
-            await repository.completePhase(householdId, 1, {}, userId);
+            await repository.completePhase(testHouseholdId, 1, {}, userId);
 
-            const progress2 = await repository.getByHouseholdId(householdId);
+            const progress2 = await repository.getByHouseholdId(testHouseholdId);
             const created2 = progress2!.createdAt.getTime();
 
             expect(created1).toBe(created2);
         });
 
         it('should track lastActivityAt updates', async () => {
-            const progress1 = await repository.getByHouseholdId(householdId);
+            const progress1 = await repository.getByHouseholdId(testHouseholdId);
             const activity1 = progress1!.lastActivityAt.getTime();
 
             await new Promise((resolve) => setTimeout(resolve, 10));
 
-            const progress2 = await repository.skipPhase(householdId, 1);
+            const progress2 = await repository.skipPhase(testHouseholdId, 1);
             const activity2 = progress2.lastActivityAt.getTime();
 
             expect(activity2).toBeGreaterThanOrEqual(activity1);
@@ -427,24 +434,31 @@ describe('Onboarding Database Schema Integration Tests', () => {
     });
 
     describe('Audit Trail', () => {
+        let testHouseholdId: string;
+
+        beforeEach(async () => {
+            testHouseholdId = uuidv4();
+            await repository.start(testHouseholdId, userId);
+        });
+
         it('should track createdBy user', async () => {
-            const progress = await repository.getByHouseholdId(householdId);
+            const progress = await repository.getByHouseholdId(testHouseholdId);
             expect(progress!.createdBy).toBe(userId);
         });
 
         it('should track updatedBy user on changes', async () => {
             const newUserId = 'different-user-456';
-            const progress = await repository.completePhase(householdId, 1, {}, newUserId);
+            const progress = await repository.completePhase(testHouseholdId, 1, {}, newUserId);
 
             expect(progress.updatedBy).toBe(newUserId);
         });
 
         it('should maintain createdBy immutability', async () => {
-            const progress1 = await repository.getByHouseholdId(householdId);
+            const progress1 = await repository.getByHouseholdId(testHouseholdId);
             const createdBy1 = progress1!.createdBy;
 
             const newUserId = 'different-user-456';
-            const progress2 = await repository.completePhase(householdId, 1, {}, newUserId);
+            const progress2 = await repository.completePhase(testHouseholdId, 1, {}, newUserId);
 
             expect(progress2.createdBy).toBe(createdBy1);
             expect(progress2.updatedBy).toBe(newUserId);
@@ -452,16 +466,23 @@ describe('Onboarding Database Schema Integration Tests', () => {
     });
 
     describe('Data Integrity', () => {
+        let testHouseholdId: string;
+
+        beforeEach(async () => {
+            testHouseholdId = uuidv4();
+            await repository.start(testHouseholdId, userId);
+        });
+
         it('should not lose phase data on updates', async () => {
             const phase1Data = { householdName: 'Test', profileType: 'FAMILY' };
             const phase2Data = { declaredAccounts: [] };
 
-            await repository.completePhase(householdId, 1, phase1Data, userId);
-            const progress1 = await repository.getByHouseholdId(householdId);
+            await repository.completePhase(testHouseholdId, 1, phase1Data, userId);
+            const progress1 = await repository.getByHouseholdId(testHouseholdId);
             expect(progress1!.phases[1].data).toEqual(phase1Data);
 
-            await repository.completePhase(householdId, 2, phase2Data, userId);
-            const progress2 = await repository.getByHouseholdId(householdId);
+            await repository.completePhase(testHouseholdId, 2, phase2Data, userId);
+            const progress2 = await repository.getByHouseholdId(testHouseholdId);
 
             expect(progress2!.phases[1].data).toEqual(phase1Data); // Still there
             expect(progress2!.phases[2].data).toEqual(phase2Data);

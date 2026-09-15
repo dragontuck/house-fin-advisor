@@ -589,3 +589,35 @@ export {
 export {
     EvidenceRelevanceChecker,
 } from "./evidence-relevance-checker";
+
+// ── Household Onboarding Workflow ────────────────────────────────────────
+// Orchestrate multi-phase household onboarding from setup through launch
+export {
+    OnboardingService,
+} from "./services/onboarding.service";
+
+export {
+    IncomeDetectionService,
+} from "./services/income-detection.service";
+
+export {
+    ExpenseDetectionService,
+} from "./services/expense-detection.service";
+
+// Onboarding types
+export type {
+    OnboardingProgress,
+    OnboardingState,
+    OnboardingPhase,
+    SetupPhaseData,
+    AccountsPhaseData,
+    StatementsPhaseData,
+    FinancialContextPhaseData,
+    ProfilePhaseData,
+    LaunchPhaseData,
+    IncomeDetection,
+    ExpenseDetection,
+    PhaseValidationResult,
+    PhaseRequirements,
+    OnboardingSessionCheckpoint,
+} from "./types/onboarding.types";

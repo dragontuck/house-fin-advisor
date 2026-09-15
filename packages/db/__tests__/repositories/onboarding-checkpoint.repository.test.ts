@@ -18,8 +18,8 @@ class MockOnboardingCheckpointRepository {
     async saveCheckpoint(
         householdId: string,
         sessionId: string,
-        phase: number,
-        checkpointData: object
+        phase: 1 | 2 | 3 | 4 | 5 | 6,
+        checkpointData: Record<string, unknown>
     ): Promise<OnboardingSessionCheckpoint> {
         const checkpoint: OnboardingSessionCheckpoint = {
             id: uuidv4(),
@@ -125,7 +125,7 @@ describe('Onboarding Checkpoint Integration Tests', () => {
                 const checkpoint = await repository.saveCheckpoint(
                     householdId,
                     sessionId,
-                    phase,
+                    phase as 1 | 2 | 3 | 4 | 5 | 6,
                     { phase }
                 );
 
@@ -323,10 +323,10 @@ describe('Onboarding Checkpoint Integration Tests', () => {
 
         it('should preserve phase progression across resume cycles', async () => {
             // Initial session
-            const phases = [1, 2, 3, 4];
+            const phases = [1, 2, 3, 4] as const;
             for (const phase of phases) {
-                await repository.saveCheckpoint(householdId, sessionId, phase, {
-                    phase,
+                await repository.saveCheckpoint(householdId, sessionId, phase as 1 | 2 | 3 | 4 | 5 | 6, {
+                    phase: phase,
                 });
                 await new Promise((resolve) => setTimeout(resolve, 5));
             }
@@ -524,7 +524,7 @@ describe('Onboarding Checkpoint Integration Tests', () => {
 
             for (let i = 1; i <= 10; i++) {
                 savePromises.push(
-                    repository.saveCheckpoint(householdId, sessionId, i % 6 || 6, {
+                    repository.saveCheckpoint(householdId, sessionId, (i % 6 || 6) as 1 | 2 | 3 | 4 | 5 | 6, {
                         step: i,
                     })
                 );
@@ -540,7 +540,7 @@ describe('Onboarding Checkpoint Integration Tests', () => {
             const checkpoints = [];
 
             for (let i = 0; i < 3; i++) {
-                const cp = await repository.saveCheckpoint(householdId, sessionId, i + 1, {});
+                const cp = await repository.saveCheckpoint(householdId, sessionId, (i + 1) as 1 | 2 | 3 | 4 | 5 | 6, {});
                 checkpoints.push(cp);
                 await new Promise((resolve) => setTimeout(resolve, 10));
             }

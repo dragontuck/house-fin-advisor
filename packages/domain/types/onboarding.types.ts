@@ -81,6 +81,8 @@ export enum AccountType {
     STUDENT_LOAN = 'STUDENT_LOAN',
     MORTGAGE = 'MORTGAGE',
     INVESTMENT = 'INVESTMENT',
+    RETIREMENT = 'RETIREMENT',
+    OTHER = 'OTHER',
 }
 
 /**
@@ -143,7 +145,8 @@ export interface DeclaredAccount {
     tempId: string;
     institution: string;
     accountType: AccountType;
-    accountName?: string;
+    nickname?: string;                     // User-friendly account name
+    accountName?: string;                  // Backward compatibility
     balance?: number;
     accountNumberSuffix?: string;
 }
@@ -153,6 +156,8 @@ export interface DeclaredAccount {
  */
 export interface AccountsPhaseData {
     declaredAccounts: DeclaredAccount[];
+    institution?: string;                  // Service compatibility
+    accounts?: DeclaredAccount[];           // Service compatibility (alias)
 }
 
 /**
@@ -171,7 +176,11 @@ export interface AccountCollectionStatus {
  * Phase 3: Upload statements
  */
 export interface StatementsPhaseData {
-    accountStatementCollectionStatus: Record<EntityId, AccountCollectionStatus>;
+    accountStatementCollectionStatus?: Record<EntityId, AccountCollectionStatus>;  // Optional for testing
+    statementUploadStatus: 'PENDING' | 'IN_PROGRESS' | 'COMPLETE' | 'PARTIAL';
+    uploadedDocuments: any[];              // List of uploaded document objects
+    uploadStatus?: string;                 // Backward compatibility
+    documents?: any[];                     // Backward compatibility
 }
 
 /**
@@ -180,9 +189,13 @@ export interface StatementsPhaseData {
 export interface IncomeDetection {
     source: IncomeSourceType;
     confidence: ConfidenceLevel;
-    monthlyGrossAmountCents: number;
+    monthlyGrossCents: number;              // Primary property for service usage
+    monthlyGrossAmountCents?: number;       // Backward compat
     monthlyNetAmountCents?: number;
-    annualGrossAmountCents?: number;
+    annualGrossCents?: number;              // Primary property for service usage
+    annualGrossAmountCents?: number;        // Backward compat
+    frequency?: 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'IRREGULAR';
+    detectionMethod?: string;
     detectionDetails?: string;
 }
 
@@ -192,9 +205,12 @@ export interface IncomeDetection {
 export interface ExpenseDetection {
     category: string;
     monthlyAmountCents: number;
+    monthlyAverageCents?: number;           // Service compatibility
     confidence: ConfidenceLevel;
     detectionSource: ExpenseSourceType;
+    transactionCount?: number;              // Service compatibility
     detectedFromTransactionCount?: number;
+    transactionSamples?: any[];
 }
 
 /**
@@ -204,6 +220,8 @@ export interface FinancialContextPhaseData {
     detectedIncome: IncomeDetection;
     detectedExpenses: ExpenseDetection[];
     userConfirmed: boolean;
+    income?: IncomeDetection;               // Service compatibility (alias)
+    expenses?: ExpenseDetection[];          // Service compatibility (alias)
 }
 
 /**
@@ -233,6 +251,7 @@ export interface ProfilePhaseData {
     privacyConfirmed: boolean;
     notificationPreferences: NotificationPreferences;
     twoFactorEnabled: boolean;
+    goals?: any[];                         // Service compatibility (financial goals list)
 }
 
 /**
@@ -297,11 +316,7 @@ export interface OnboardingProgress {
     totalTimeMinutes: number; // Calculated: (completedAt - startedAt) / 60000
 
     // Last checkpoint for resume
-    lastCheckpoint: {
-        phase: OnboardingPhase;
-        sessionId: string;
-        createdAt: Date;
-    } | null;
+    lastCheckpoint: EntityId | null;   // ID of the last saved checkpoint session
 
     // Audit trail
     createdBy: EntityId;
@@ -376,6 +391,7 @@ export interface ValidationError {
  * Phase validation result
  */
 export interface PhaseValidationResult {
+    phase?: OnboardingPhase;                // Service compatibility
     isValid: boolean;
     errors: ValidationError[];
     warnings: ValidationError[];
@@ -387,6 +403,7 @@ export interface PhaseValidationResult {
  */
 export interface PhaseRequirements {
     phase: OnboardingPhase;
+    phaseNumber?: OnboardingPhase;          // Service compatibility (alias)
     title: string;
     description: string;
     estimatedMinutes: number;
