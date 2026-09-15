@@ -243,6 +243,12 @@ describe('API Routes: Onboarding', () => {
         api = new MockOnboardingAPI();
     });
 
+    afterEach(() => {
+        // Clean up resources to prevent timer leaks
+        api = null as any;
+        jest.clearAllTimers();
+    });
+
     describe('POST /api/onboarding/start', () => {
         it('should return 201 Created on successful start', async () => {
             const response = await api.handleRequest({

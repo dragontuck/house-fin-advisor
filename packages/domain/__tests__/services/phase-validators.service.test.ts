@@ -11,6 +11,7 @@ import {
     StatementsPhaseData,
     HouseholdProfileType,
     AccountType,
+    StatementUploadStatus,
 } from '../../../domain/types/onboarding.types';
 
 export interface ValidationResult {
@@ -144,6 +145,10 @@ describe('Phase Validation: Business Rules', () => {
 
     beforeEach(() => {
         validator = new PhaseValidator();
+    });
+
+    afterEach(() => {
+        jest.clearAllTimers();
     });
 
     describe('Phase 1: Setup - Household Information', () => {
@@ -370,7 +375,7 @@ describe('Phase Validation: Business Rules', () => {
     describe('Phase 3: Statements - Document Upload', () => {
         it('should accept valid Phase 3 data', () => {
             const data: StatementsPhaseData = {
-                statementUploadStatus: 'COMPLETE',
+                statementUploadStatus: StatementUploadStatus.COMPLETE,
                 uploadedDocuments: [
                     { id: 'doc-1', accountId: 'acc-1', uploadedAt: new Date() },
                 ],
@@ -382,7 +387,7 @@ describe('Phase Validation: Business Rules', () => {
         });
 
         it('should accept all valid upload statuses', () => {
-            const statuses = ['PENDING', 'IN_PROGRESS', 'COMPLETE', 'PARTIAL'];
+            const statuses = [StatementUploadStatus.PENDING, StatementUploadStatus.IN_PROGRESS, StatementUploadStatus.COMPLETE, StatementUploadStatus.PARTIAL];
 
             for (const status of statuses) {
                 const data: StatementsPhaseData = {
@@ -397,7 +402,7 @@ describe('Phase Validation: Business Rules', () => {
 
         it('should reject invalid upload status', () => {
             const data: StatementsPhaseData = {
-                statementUploadStatus: 'INVALID',
+                statementUploadStatus: 'INVALID' as StatementUploadStatus,
                 uploadedDocuments: [],
             };
 
@@ -409,7 +414,7 @@ describe('Phase Validation: Business Rules', () => {
 
         it('should warn when no documents uploaded', () => {
             const data: StatementsPhaseData = {
-                statementUploadStatus: 'PENDING',
+                statementUploadStatus: StatementUploadStatus.PENDING,
                 uploadedDocuments: [],
             };
 
@@ -420,7 +425,7 @@ describe('Phase Validation: Business Rules', () => {
 
         it('should accept PARTIAL upload status with some documents', () => {
             const data: StatementsPhaseData = {
-                statementUploadStatus: 'PARTIAL',
+                statementUploadStatus: StatementUploadStatus.PARTIAL,
                 uploadedDocuments: [
                     { id: 'doc-1', accountId: 'acc-1', uploadedAt: new Date() },
                 ],

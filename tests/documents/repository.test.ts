@@ -27,6 +27,8 @@ describe("PgFinancialDocumentRepository", () => {
         // Cleanup: Delete test household (cascades to documents)
         await query("DELETE FROM finhouse.households WHERE id = $1", [testHouseholdId]);
         await closeConnection();
+        // Allow time for connection pool to drain gracefully
+        await new Promise((resolve) => setTimeout(resolve, 100));
     });
 
     describe("create", () => {

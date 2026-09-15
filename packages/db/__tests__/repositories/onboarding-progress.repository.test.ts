@@ -28,6 +28,7 @@ interface MockDatabase {
 class MockOnboardingProgressRepository {
     constructor(private db: MockDatabase) { }
 
+
     async start(
         householdId: string,
         userId: string
@@ -194,6 +195,14 @@ describe('Onboarding Database Schema Integration Tests', () => {
             },
         };
         repository = new MockOnboardingProgressRepository(db);
+    });
+
+    afterEach(() => {
+        // Clean up resources to prevent timer leaks
+        db.onboardingProgress.clear();
+        db.onboardingCheckpoints.clear();
+        db.constraints.uniqueHouseholdId.clear();
+        jest.clearAllTimers();
     });
 
     describe('UNIQUE(household_id) Constraint', () => {

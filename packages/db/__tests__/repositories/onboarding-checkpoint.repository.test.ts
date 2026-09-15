@@ -99,6 +99,12 @@ describe('Onboarding Checkpoint Integration Tests', () => {
         repository = new MockOnboardingCheckpointRepository(db);
     });
 
+    afterEach(() => {
+        // Clean up resources to prevent timer leaks
+        db.checkpoints.clear();
+        jest.clearAllTimers();
+    });
+
     describe('Checkpoint Save', () => {
         it('should save checkpoint at phase 1', async () => {
             const phase1Data = {

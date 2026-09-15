@@ -83,6 +83,10 @@ describe('Service: OnboardingService', () => {
         userId = 'test-user-123';
     });
 
+    afterEach(() => {
+        jest.clearAllTimers();
+    });
+
     describe('startOnboarding()', () => {
         it('should create new onboarding progress', async () => {
             const progress = await service.startOnboarding(householdId, userId);

@@ -124,6 +124,16 @@ export enum StatementCollectionStatus {
     ERROR = 'ERROR',
 }
 
+/**
+ * Overall statement upload status for phase 3
+ */
+export enum StatementUploadStatus {
+    PENDING = 'PENDING',
+    IN_PROGRESS = 'IN_PROGRESS',
+    COMPLETE = 'COMPLETE',
+    PARTIAL = 'PARTIAL',
+}
+
 // ============================================================================
 // PHASE DATA TYPES
 // ============================================================================
@@ -136,6 +146,7 @@ export interface SetupPhaseData {
     profileType: HouseholdProfileType;
     primaryMemberId: EntityId;
     initialInstitutions: string[];
+    completedAt?: Date | undefined;
 }
 
 /**
@@ -149,6 +160,7 @@ export interface DeclaredAccount {
     accountName?: string;                  // Backward compatibility
     balance?: number;
     accountNumberSuffix?: string;
+    currency?: string;
 }
 
 /**
@@ -158,6 +170,7 @@ export interface AccountsPhaseData {
     declaredAccounts: DeclaredAccount[];
     institution?: string;                  // Service compatibility
     accounts?: DeclaredAccount[];           // Service compatibility (alias)
+    completedAt?: Date | undefined;
 }
 
 /**
@@ -177,7 +190,7 @@ export interface AccountCollectionStatus {
  */
 export interface StatementsPhaseData {
     accountStatementCollectionStatus?: Record<EntityId, AccountCollectionStatus>;  // Optional for testing
-    statementUploadStatus: 'PENDING' | 'IN_PROGRESS' | 'COMPLETE' | 'PARTIAL';
+    statementUploadStatus: StatementUploadStatus;
     uploadedDocuments: any[];              // List of uploaded document objects
     uploadStatus?: string;                 // Backward compatibility
     documents?: any[];                     // Backward compatibility

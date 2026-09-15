@@ -168,6 +168,10 @@ describe('Service: IncomeDetectionService', () => {
         service = new IncomeDetectionService();
     });
 
+    afterEach(() => {
+        jest.clearAllTimers();
+    });
+
     describe('detectIncome()', () => {
         it('should return null for empty transaction list', async () => {
             const result = await service.detectIncome([]);
@@ -212,6 +216,18 @@ describe('Service: IncomeDetectionService', () => {
                     id: '4',
                     description: 'Direct Deposit Salary',
                     transactionDate: new Date('2024-01-22'),
+                    amountCents: 110000,
+                }) as any,
+                createTestTransaction({
+                    id: '5',
+                    description: 'Paycheck Deposit',
+                    transactionDate: new Date('2024-01-29'),
+                    amountCents: 110000,
+                }) as any,
+                createTestTransaction({
+                    id: '6',
+                    description: 'Direct Deposit Salary',
+                    transactionDate: new Date('2024-02-05'),
                     amountCents: 110000,
                 }) as any,
             ];

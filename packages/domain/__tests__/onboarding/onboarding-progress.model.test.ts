@@ -16,11 +16,14 @@ import {
     FinancialContextPhaseData,
     ProfilePhaseData,
     LaunchPhaseData,
+    HouseholdProfileType,
 } from '../../../domain/types/onboarding.types';
 
 describe('OnboardingProgress Model', () => {
     const householdId = uuidv4();
     const userId = 'keycloak-user-123';
+    const householdName = 'Test Household';
+    const initialInstitutions: string[] = [];
 
     describe('Initialization', () => {
         it('should create a new onboarding progress in Phase 1 with NOT_STARTED state', () => {
@@ -97,7 +100,7 @@ describe('OnboardingProgress Model', () => {
                     1: {
                         completed: true,
                         completedAt: new Date('2026-09-13T10:00:00Z'),
-                        data: { householdName: 'Smith Family', profileType: 'FAMILY' }
+                        data: { householdName: 'Smith Family', profileType: HouseholdProfileType.FAMILY, primaryMemberId: userId, initialInstitutions: initialInstitutions }
                     },
                     2: { completed: false, completedAt: null, data: null },
                     3: { completed: false, completedAt: null, data: null },
@@ -121,7 +124,7 @@ describe('OnboardingProgress Model', () => {
             expect(progress.phases[1].data).toEqual(
                 expect.objectContaining({
                     householdName: 'Smith Family',
-                    profileType: 'FAMILY',
+                    profileType: HouseholdProfileType.FAMILY,
                 })
             );
         });
@@ -136,7 +139,7 @@ describe('OnboardingProgress Model', () => {
                     1: {
                         completed: true,
                         completedAt: new Date('2026-09-13T10:00:00Z'),
-                        data: { householdName: 'Test' }
+                        data: { householdName: 'Test', profileType: HouseholdProfileType.FAMILY, primaryMemberId: userId, initialInstitutions: initialInstitutions }
                     },
                     2: {
                         completed: true,
@@ -241,6 +244,8 @@ describe('OnboardingProgress Model', () => {
             const checkpointData = {
                 householdName: 'Test Family',
                 profileType: 'FAMILY',
+                primaryMemberId: userId,
+                initialInstitutions: initialInstitutions,
             };
 
             const progress: OnboardingProgress = {
@@ -249,7 +254,7 @@ describe('OnboardingProgress Model', () => {
                 currentPhase: 2,
                 currentState: OnboardingState.IN_PROGRESS,
                 phases: {
-                    1: { completed: true, completedAt: new Date(), data: checkpointData },
+                    1: { completed: true, completedAt: new Date(), data: checkpointData as SetupPhaseData },
                     2: { completed: false, completedAt: null, data: null },
                     3: { completed: false, completedAt: null, data: null },
                     4: { completed: false, completedAt: null, data: null },
@@ -334,7 +339,7 @@ describe('OnboardingProgress Model', () => {
 
             expect(progress.createdBy).toBe(createdBy);
             expect(progress.updatedBy).toBe(updatedBy);
-            expect(progress.createdAt).toBeLessThanOrEqual(progress.updatedAt);
+            expect(+progress.createdAt).toBeLessThanOrEqual(+progress.updatedAt);
         });
 
         it('should maintain immutable creation timestamp', () => {

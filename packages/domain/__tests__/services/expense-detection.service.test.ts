@@ -107,13 +107,19 @@ class ExpenseDetectionService {
     private detectCategory(description: string): string {
         const lowercase = description.toLowerCase();
 
+        // Find the longest matching keyword to prefer more specific matches
+        // e.g., 'gas station' over 'gas'
+        let bestMatch: { category: string; keyword: string; length: number } | null = null;
+
         for (const [category, keywords] of Object.entries(this.categoryKeywords)) {
-            if (keywords.some((keyword) => lowercase.includes(keyword))) {
-                return category;
+            for (const keyword of keywords) {
+                if (lowercase.includes(keyword) && keyword.length > (bestMatch?.length ?? 0)) {
+                    bestMatch = { category, keyword, length: keyword.length };
+                }
             }
         }
 
-        return 'Other';
+        return bestMatch?.category ?? 'Other';
     }
 
     private analyzeCategory(category: string, transactions: PostedTransaction[]): DetectedExpense {
@@ -219,6 +225,10 @@ describe('Service: ExpenseDetectionService', () => {
 
     beforeEach(() => {
         service = new ExpenseDetectionService();
+    });
+
+    afterEach(() => {
+        jest.clearAllTimers();
     });
 
     describe('detectExpenses()', () => {
