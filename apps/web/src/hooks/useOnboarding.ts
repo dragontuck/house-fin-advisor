@@ -31,7 +31,7 @@ export function useOnboarding(householdId: EntityId) {
                 setIsLoading(true);
                 setError(null);
                 const response = await fetch(`${API_BASE}/onboarding/progress?householdId=${householdId}`);
-                
+
                 if (!response.ok) {
                     if (response.status === 404) {
                         // No progress yet, initialize
@@ -77,7 +77,7 @@ export function useOnboarding(householdId: EntityId) {
             });
 
             if (!response.ok) throw new Error('Failed to start onboarding');
-            
+
             const data = await response.json();
             setProgress(data.progress);
             return data.progress;
@@ -102,7 +102,7 @@ export function useOnboarding(householdId: EntityId) {
             });
 
             if (!response.ok) throw new Error('Failed to move to phase');
-            
+
             const data = await response.json();
             setProgress(data.progress);
             return data.progress;
@@ -127,7 +127,7 @@ export function useOnboarding(householdId: EntityId) {
             });
 
             if (!response.ok) throw new Error('Failed to complete phase');
-            
+
             const responseData = await response.json();
             setProgress(responseData.progress);
             return responseData.progress;
@@ -155,7 +155,7 @@ export function useOnboarding(householdId: EntityId) {
                 const errorData = await response.json();
                 throw new Error(errorData.message || 'Cannot skip this phase');
             }
-            
+
             const data = await response.json();
             setProgress(data.progress);
             return data.progress;
@@ -171,7 +171,7 @@ export function useOnboarding(householdId: EntityId) {
     // Save checkpoint
     const saveCheckpoint = useCallback(async () => {
         if (!progress) return;
-        
+
         try {
             const response = await fetch(`${API_BASE}/onboarding/checkpoint/save`, {
                 method: 'POST',
@@ -199,7 +199,7 @@ export function useOnboarding(householdId: EntityId) {
             });
 
             if (!response.ok) throw new Error('Failed to restart onboarding');
-            
+
             const data = await response.json();
             setProgress(data.progress);
             return data.progress;
@@ -237,7 +237,7 @@ export function useFormProgress(
     const [data, setData] = useState(initialData);
     const [isSaving, setIsSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
-    
+
     // Debounce timer reference
     const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -253,7 +253,7 @@ export function useFormProgress(
             try {
                 setIsSaving(true);
                 setSaveError(null);
-                
+
                 const response = await fetch(`${API_BASE}/onboarding/checkpoint/save`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -312,9 +312,9 @@ export function useStatementGuidance(accountId: EntityId) {
                 setIsLoading(true);
                 setError(null);
                 const response = await fetch(`${API_BASE}/onboarding/accounts/${accountId}/guidance`);
-                
+
                 if (!response.ok) throw new Error('Failed to fetch guidance');
-                
+
                 const data = await response.json();
                 setGuidance(data.guidance);
             } catch (err) {
@@ -349,9 +349,9 @@ export function useIncomeDetection(householdId: EntityId) {
             setIsLoading(true);
             setError(null);
             const response = await fetch(`${API_BASE}/onboarding/detect-income?householdId=${householdId}`);
-            
+
             if (!response.ok) throw new Error('Failed to detect income');
-            
+
             const data = await response.json();
             setDetections(data.detections || []);
             return data.detections;
@@ -375,7 +375,7 @@ export function useIncomeDetection(householdId: EntityId) {
             });
 
             if (!response.ok) throw new Error('Failed to confirm income');
-            
+
             const data = await response.json();
             return data;
         } catch (err) {
@@ -408,16 +408,16 @@ export function useExpenseDetection(householdId: EntityId) {
         try {
             setIsLoading(true);
             setError(null);
-            
+
             const params = new URLSearchParams({ householdId });
             if (accountIds?.length) {
                 params.append('accountIds', accountIds.join(','));
             }
-            
+
             const response = await fetch(`${API_BASE}/onboarding/detect-expenses?${params}`);
-            
+
             if (!response.ok) throw new Error('Failed to detect expenses');
-            
+
             const data = await response.json();
             setDetections(data.detections || []);
             return data.detections;
@@ -441,7 +441,7 @@ export function useExpenseDetection(householdId: EntityId) {
             });
 
             if (!response.ok) throw new Error('Failed to confirm expense');
-            
+
             const data = await response.json();
             return data;
         } catch (err) {
@@ -473,7 +473,7 @@ export function useFormValidation() {
         try {
             setIsValidating(true);
             setErrors([]);
-            
+
             const response = await fetch(`${API_BASE}/onboarding/validate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -481,7 +481,7 @@ export function useFormValidation() {
             });
 
             if (!response.ok) throw new Error('Validation failed');
-            
+
             const result = await response.json();
             if (result.errors && result.errors.length > 0) {
                 setErrors(result.errors);
@@ -521,14 +521,14 @@ export function useCheckpointResume(householdId: EntityId, sessionId?: string) {
             try {
                 setIsLoading(true);
                 setError(null);
-                
+
                 const params = new URLSearchParams({ householdId });
                 if (sessionId) {
                     params.append('sessionId', sessionId);
                 }
-                
+
                 const response = await fetch(`${API_BASE}/onboarding/checkpoint/resume?${params}`);
-                
+
                 if (response.status === 404) {
                     // No checkpoint found
                     setCheckpoint(null);
