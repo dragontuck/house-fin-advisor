@@ -225,18 +225,36 @@ infra/            Infrastructure and environment configuration
 
 ---
 
-## Documentation map
+## Documentation Map
 
-Use these guides for more detail:
+### 📊 For Everyone
 
-- `docs/INDEX.md` — project documentation index
-- `docs/COMPLETION_SUMMARY.md` — implementation summary
-- `docs/AI_TOOL_LAYER_ARCHITECTURE.md` — AI tool architecture
-- `docs/AI_TOOL_LAYER_DETERMINISM_TESTING.md` — deterministic testing guidance
-- `docs/PRIVACY_BOUNDARY_IMPLEMENTATION.md` — privacy boundary design
-- `docs/FINANCIAL_CONTEXT_BUILDER.md` — context-building logic
-- `docs/SESSION_SUMMARY_SLICE3.md` — Slice 3 integration summary
-- `AGENTS.md` — product and architecture rules
+- [**START HERE: User Guide**](docs/USER_GUIDE_START_HERE.md) — How to use House Financial Advisor (non-technical, spouse-friendly)
+- [**Deployment & Operations**](docs/DEPLOYMENT_OPERATIONS_GUIDE.md) — Self-hosting setup, maintenance, backup/restore, troubleshooting
+
+### 💼 For Investors & Executives
+
+- [**Executive Summary**](docs/EXECUTIVE_SUMMARY.md) — Business case, market opportunity, differentiation, roadmap, investment highlights
+- [**Implementation Status Report**](docs/IMPLEMENTATION_STATUS_REPORT.md) — Metrics, progress, test coverage, production readiness, risks, roadmap
+
+### 🔒 For Security & Compliance Teams
+
+- [**Security, Privacy & Compliance**](docs/SECURITY_PRIVACY_COMPLIANCE.md) — Privacy model, threat assessment, GDPR/CCPA readiness, compliance roadmap, incident response
+- [**Data Model Overview**](docs/DATA_MODEL_OVERVIEW.md) — Database schema, API contracts, financial calculations, domain services
+
+### 📋 For Product Teams
+
+- [**Product Capabilities & Roadmap**](docs/PRODUCT_CAPABILITIES_AND_ROADMAP.md) — Feature matrix (Slices 1-10), user stories, success metrics, prioritization
+- [**Architecture Decision Records**](docs/adr/README.md) — 10 ADRs documenting all major architectural decisions
+
+### 🏗️ For Developers
+
+- [**Project INDEX**](docs/INDEX.md) — Complete documentation index
+- [**AI Tool Layer Architecture**](docs/AI_TOOL_LAYER_ARCHITECTURE.md) — Tool design and execution
+- [**Privacy Boundary Implementation**](docs/PRIVACY_BOUNDARY_IMPLEMENTATION.md) — Data filtering, PII protection
+- [**Financial Context Builder**](docs/FINANCIAL_CONTEXT_BUILDER.md) — Context building logic
+- [**AGENTS.md**](AGENTS.md) — Product rules and architecture guidelines
+- [**PRODUCT_BUILD_CONTRACT.md**](PRODUCT_BUILD_CONTRACT.md) — Product principles and constraints
 
 ---
 

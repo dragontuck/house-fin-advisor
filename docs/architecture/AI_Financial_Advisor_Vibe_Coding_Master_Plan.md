@@ -13,7 +13,7 @@
 
 # 1. Product Vision
 
-The AI Financial Advisor should become a **household financial operating system** that continuously understands the household's current financial state and helps answer questions such as:
+The AI Financial Advisor should become a **household financial operating system** that maintains a current financial state based on the latest available imported data and helps answer questions such as:
 
 - How are we doing financially?
 - Help me create an initial budget.
@@ -30,7 +30,6 @@ The system should remember the household's structured financial state so the use
 
 The system should also make it easy for a non-technical spouse to:
 
-- connect financial accounts;
 - upload statements;
 - resolve an error;
 - understand the household's financial position;
@@ -102,11 +101,52 @@ The default UI should be understandable by a non-technical spouse without unders
 
 - APIs;
 - OCR;
-- bank aggregation;
+- bank/utility/loan/credit-card statement processing;
 - reconciliation;
 - AI orchestration;
 - Docker;
 - cloud infrastructure.
+
+---
+
+# 3. Product Data-Ingestion Strategy & Product Decision
+
+## Online institution integrations are postponed — date TBD
+
+The product will **not implement direct online connections to banks, credit-card issuers, loan providers, utilities, brokerages, or other financial institutions during the initial roadmap**. The timing for online institution integration is **TBD** and will be revisited only after the document/CSV ingestion experience, financial normalization, reconciliation, and household UX have proven reliable.
+
+This is an intentional Product Owner decision, not an architectural dead end. The application will retain a provider-neutral ingestion boundary so online integrations can be added later without changing the canonical financial model.
+
+### Current data-ingestion priority
+
+The near-term product priority is to make it extremely easy for a household member to:
+
+1. Export financial data from an institution as CSV and import it.
+2. Download a PDF statement/bill and upload it.
+3. Have the system identify the source type automatically.
+4. Extract balances, transactions, charges, payments, due dates, recurring obligations, and other relevant financial facts.
+5. Reconcile the imported information against previously imported data.
+6. Resolve only the exceptions that require human judgment.
+7. Recalculate the household financial state automatically.
+
+### Supported source categories
+
+The ingestion pipeline should explicitly support these source categories:
+
+| Source | Typical files | Primary extracted information |
+|---|---|---|
+| Bank | CSV, PDF | account balance, deposits, withdrawals, transfers, transactions, statement period |
+| Credit Card | CSV, PDF | purchases, payments, credits, fees, statement balance, minimum payment, due date, rewards-related observations where present |
+| Loan | CSV, PDF | principal balance, payment, interest rate when shown, fees, due date, payment history, payoff/term information when shown |
+| Utility | CSV, PDF | provider, service period, bill amount, due date, recurring charge, usage where available, taxes/fees, payment status |
+
+Utility documents are **obligations/bills**, not necessarily financial accounts. Their extracted data should feed the recurring-obligation and cash-flow models rather than force them into the Account model.
+
+### Product principle
+
+> **Make manual import feel automatic before making automatic connections available.**
+
+The application should achieve a high-quality, low-friction import and reconciliation experience first.
 
 ---
 
@@ -136,7 +176,7 @@ The default UI should be understandable by a non-technical spouse without unders
              │                        │                       │
              ▼                        ▼                       ▼
       Context Builder          Financial Engine        Documents
-      Tool Layer               Budget                  Bank Feeds
+      Tool Layer               Budget                  CSV / PDF Financial Data
       Workflows                Cash Flow               CSV / PDF
       Privacy Gateway          Goals                   Reconcile
       Response Validation      Debt
@@ -360,14 +400,17 @@ Prefer:
 | Slice | Purpose | Major Output |
 |---|---|---|
 | 1 | Household Financial Pulse | Household + accounts + FinancialSnapshot + dashboard |
-| 2 | Statement Ingestion | PDF/CSV/image ingestion + reconciliation + Review Queue |
-| 3 | Financial Intelligence | Budget + cash flow + goals + debt + attention |
+| 2 | Financial Statement & Bill Ingestion | CSV/PDF extraction for bank, credit-card, loan, and utility data + reconciliation + Review Queue |
+| 3 | Financial Intelligence | Budget + cash flow + goals + debt + recurring obligations + attention |
 | 4 | AI Advisor & Planning | Conversational AI + budget planning workflows |
 | 5 | Research & Validated Recommendations | Evidence + recommendation + independent validation |
-| 6 | Bank Integrations & Continuous Sync | Aggregator/provider connections + automatic updates |
+| 6 | Advanced Import Intelligence | Improve CSV/PDF extraction, source templates, document learning, reconciliation, and recurring-financial-fact extraction |
 | 7 | Advanced Financial Optimization | Windfalls + surprise expenses + credit cards + FI |
 | 8 | Privacy/Security/UX Hardening | Production-grade privacy, resilience, usability |
 | 9 | Productionization | Backup/restore, observability, deployment, upgrade/runbooks |
+| 10 | Online Institution Integrations — TBD | Direct institution/aggregator connections and automatic synchronization, timing TBD |
+
+**Product sequencing decision:** Slices 1–9 are the active product-development roadmap. Slice 10 is deliberately postponed with a **TBD** date. No active MVP work should depend on direct institution integrations. The canonical ingestion model must remain provider-neutral so this capability can be added later without redesigning the financial domain.
 
 ---
 
@@ -379,7 +422,7 @@ Create household → add members → add fictional accounts → calculate Financ
 
 ## Exclusions
 
-No bank integration, statement ingestion, AI, research, credit-card optimization, investment recommendations, or money movement.
+No online institution integration, statement ingestion, AI, research, credit-card optimization, investment recommendations, or money movement.
 
 ## Initial Slice Prompt
 
@@ -411,7 +454,7 @@ Implement:
 Use fictional seeded data.
 
 Do not implement:
-- bank integrations
+- online institution integrations
 - statement ingestion
 - AI
 - research
@@ -457,7 +500,7 @@ FinancialSnapshot is derived, not directly editable.
 
 Seed a fictional Tucker Household.
 
-Do not build UI, AI, bank integration, or statement ingestion.
+Do not build UI, AI, online institution integration, or statement ingestion.
 
 Add domain and persistence tests.
 ```
@@ -570,95 +613,172 @@ Return findings and required fixes only.
 
 ---
 
-# 10. Slice 2 — Statement Ingestion
+# 10. Slice 2 — Financial Statement & Bill Ingestion
 
 ## Objective
 
-Upload statement → validate → parse → normalize → reconcile → auto-post high-confidence records → send ambiguous records to Review Queue → recalculate financial state.
+Make financial-data import extremely easy by extracting and normalizing information from CSV files and PDF statements/bills for banks, credit cards, loans, and utilities.
+
+The normal user experience is:
+
+Upload CSV/PDF → identify source → extract → normalize → reconcile → auto-post high-confidence data → review exceptions → recalculate financial state.
+
+## Product Focus
+
+The application should prioritize **process quality, extraction accuracy, reconciliation, provenance, and exceptional UX** over institution API connectivity.
+
+### Supported source categories
+
+- Bank statements
+- Credit-card statements
+- Loan statements
+- Utility bills/statements
+
+### Supported file types
+
+- CSV
+- PDF
+
+Image/scanned-document support may be retained as a controlled fallback where practical, but it is not the primary Slice 2 product path.
 
 ## Exclusions
 
-No bank APIs, public LLM calls, investment advice, money movement, or credit-card optimizer.
+No direct online institution connections, OAuth bank connections, provider sync, public LLM parsing, investment advice, money movement, or credit-card optimization.
 
 ## Initial Slice Prompt
 
 ```text
-Implement Slice 2 — Statement Ingestion.
+Implement Slice 2 — Financial Statement & Bill Ingestion.
 
-The normal user experience must be:
+The product priority is reliable, low-friction extraction of financial information from CSV files and PDF statements/bills.
 
-Drop statement → processing → success or guided review.
+Support these source categories:
+- bank statements
+- credit-card statements
+- loan statements
+- utility bills/statements
 
-Support:
+Support these primary file types:
 - CSV
 - PDF
-- image
+
+The normal user experience must be:
+Drop/import a file → identify source → process → reconcile → complete or guided review.
 
 Build:
-- Statement domain object
+- FinancialDocument/Statement domain object
 - encrypted MinIO storage
 - checksum
-- async processing
-- statement lifecycle
-- parser abstractions
-- transaction candidates
+- asynchronous processing
+- source/category detection
+- CSV parsing
+- PDF text/table extraction
+- OCR fallback when required
+- transaction/financial-fact candidates
 - normalization
 - reconciliation
 - confidence
 - Review Queue
 - posting
 - FinancialSnapshot recalculation
+- recurring-obligation extraction for utility bills
 - user-friendly errors
 
-Processing must be asynchronous.
-Raw source statements are immutable.
-Reprocessing must be idempotent.
-Duplicate transactions must never be silently created.
-Ambiguous transactions must go to Review Queue.
+For utilities, extract bill/obligation information rather than forcing utility bills into the Account model.
 
-Treat uploaded documents as untrusted.
-Do not implement AI-based parsing.
+Processing must be asynchronous.
+Raw source documents are immutable.
+Reprocessing must be idempotent.
+Duplicate data must never be silently created.
+Ambiguous extraction/reconciliation must go to Review Queue.
+
+Treat uploaded documents as untrusted input.
+Do not use an LLM for primary extraction or reconciliation.
+Do not implement online institution integrations in this slice.
 Do not introduce separate microservices yet.
 ```
 
-## Targeted Prompt 1 — Document domain/storage
+## Targeted Prompt 1 — Document/source domain and storage
 
 ```text
-Implement the Statement domain model, database migration, repository, MinIO storage adapter, checksum handling, and processing state machine.
+Implement the financial-document domain model, persistence, and storage foundation for Slice 2.
 
-Retain the original file.
-Use SHA-256 checksum.
-Detect duplicate source files within household scope.
-Never overwrite original source documents.
-Do not implement parsing or reconciliation yet.
-Add tests for authorization, checksum, duplicate files, and state transitions.
+Support document/source types:
+- BANK_STATEMENT
+- CREDIT_CARD_STATEMENT
+- LOAN_STATEMENT
+- UTILITY_BILL
+- FINANCIAL_CSV
+
+Retain:
+- original file
+- checksum
+- household ownership
+- uploader
+- upload time
+- processing status
+- source category
+- institution/provider name when identifiable
+- account/service relationship when identifiable
+- statement/billing period
+- processing version
+- provenance
+
+For utility documents, create or extend a recurring-obligation/bill model rather than treating the utility provider as a bank account.
+
+Use MinIO for source files and PostgreSQL for structured metadata.
+
+Do not implement parsing yet.
+Add tests for authorization, checksum, duplicate source files, and state transitions.
 ```
 
-## Targeted Prompt 2 — Upload UX
+## Targeted Prompt 2 — Import UX
 
 ```text
-Implement the statement upload UX.
+Implement the financial-data import UX.
 
-Support drag/drop and file picker.
-Show:
-- upload progress
-- processing progress
-- completion
-- review-required state
-- friendly errors
+The primary entry point should be simple:
 
-Do not expose parser names, SQL errors, queue names, or provider codes.
+[ Add Financial Data ]
 
-Use plain-language messages and clear Fix It actions.
+Then allow:
+- Drop a CSV or PDF
+- Choose a file
+
+The system should automatically identify whether the file appears to be:
+- bank statement
+- credit-card statement
+- loan statement
+- utility bill
+
+Show human-readable processing progress:
+- File received
+- Identifying source
+- Reading financial information
+- Checking for duplicates
+- Reconciling with existing data
+- Updating your financial picture
+
+Do not expose parser names, SQL errors, extraction libraries, queue names, or technical codes.
+
+If identification is uncertain, ask one simple question:
+"What type of document is this?"
+
 Add Playwright coverage.
 ```
 
-## Targeted Prompt 3 — CSV
+## Targeted Prompt 3 — CSV financial-data extraction
 
 ```text
-Implement a CSV StatementParser abstraction and CsvStatementParser.
+Implement a provider-agnostic CSV financial-data parser framework.
 
-Support common combinations of:
+Support CSV structures from:
+- banks
+- credit cards
+- loans
+- utilities
+
+Common fields may include:
 - date
 - description
 - amount
@@ -666,48 +786,112 @@ Support common combinations of:
 - credit
 - balance
 - transaction ID
+- payment
+- due date
+- interest rate
+- principal balance
+- service period
+- usage
+- fees
 
-Produce normalized transaction candidates rather than canonical transactions.
-Preserve original description and source row.
-Reject ambiguous mappings rather than guessing.
-Add fixtures and regression tests.
+Do not assume every CSV contains every field.
+
+The parser should identify the source category and map fields into provider-neutral extraction contracts.
+
+Produce extracted candidates rather than canonical transactions/bills.
+Preserve original field values and source row numbers.
+Reject ambiguous mappings rather than guessing silently.
+
+Create fixtures and regression tests for each supported source category.
 Do not use an LLM.
 ```
 
-## Targeted Prompt 4 — PDF/image
+## Targeted Prompt 4 — PDF extraction by source category
 
 ```text
-Implement PDF and image statement processing.
+Implement PDF statement/bill extraction for:
+- bank statements
+- credit-card statements
+- loan statements
+- utility bills
 
 Processing order:
 1. file validation
 2. text extraction
-3. table extraction
-4. OCR fallback
-5. metadata extraction
-6. transaction extraction
+3. table extraction where applicable
+4. OCR fallback only when required
+5. source/category detection
+6. metadata extraction
+7. financial-fact/transaction/bill extraction
 
-Run in worker context.
-Apply size/time/resource limits.
-Treat documents as untrusted.
-Do not fabricate extracted values.
-Low-confidence extraction must become a review/processing issue.
-Add representative fixtures.
+Extract, where present:
+- institution/provider
+- account/service identifier in redacted form
+- statement/billing period
+- opening/closing balance
+- transactions
+- payments
+- fees
+- interest rate
+- minimum payment
+- due date
+- principal balance
+- bill amount
+- recurring charge
+- utility usage
+
+Run in the worker context with resource limits.
+Treat document contents as untrusted data.
+Do not fabricate missing values.
+Low-confidence extraction becomes a review item.
 ```
 
-## Targeted Prompt 5 — Normalization/reconciliation
+## Targeted Prompt 5 — Normalized financial-fact model
 
 ```text
-Implement transaction normalization and reconciliation.
+Implement the provider-neutral normalized financial-fact contract between parsers and the canonical financial model.
 
-Match using:
-- provider transaction ID
-- statement reference
-- account
+The contract must support at least:
+- account observations
+- transaction observations
+- balance observations
+- debt/loan observations
+- payment observations
+- bill/utility observations
+- recurring-obligation observations
+
+Every observation must retain provenance:
+- source document
+- page/row when available
+- extracted field
+- parser version
+- confidence
+
+Do not force every source into the Transaction model.
+Utility bill facts and loan balance facts may feed different canonical domains.
+
+Add serialization and contract tests.
+```
+
+## Targeted Prompt 6 — Reconciliation
+
+```text
+Extend reconciliation to support imported CSV/PDF observations across banks, credit cards, loans, and utilities.
+
+For transactions, match using:
+- source transaction ID when present
+- account/service relationship
 - amount
 - date proximity
-- merchant similarity
-- direction
+- merchant/provider normalization
+- transaction direction
+
+For bills/loan observations, additionally consider:
+- billing/statement period
+- due date
+- statement balance
+- prior balance
+- payment amount
 
 Return:
 NEW
@@ -715,85 +899,156 @@ MATCHED
 POSSIBLE_DUPLICATE
 CONFLICT
 
-Store confidence and reasons.
-Never silently duplicate transactions.
-If authoritative sources disagree, preserve both observations and create a reconciliation issue.
-Add idempotency tests and overlap tests.
+Never silently duplicate data.
+If balances or authoritative observations disagree, preserve both observations and create a reconciliation issue.
+Add idempotency and overlap tests.
 ```
 
-## Targeted Prompt 6 — Review Queue
+## Targeted Prompt 7 — Utility recurring obligations
 
 ```text
-Implement the Review Queue.
+Implement extraction and normalization of recurring utility obligations.
+
+Support utility bills containing:
+- provider
+- service period
+- bill amount
+- due date
+- payment status when present
+- recurring base charge
+- taxes/fees
+- usage when present
+
+Create a recurring-obligation representation that can feed cash-flow forecasting.
+
+Do not require a utility bill to have a traditional financial Account.
+
+Calculate confidence for recurring patterns.
+Do not predict future utility costs from one bill.
+Use observed history when sufficient data exists.
+
+Add fixtures for electricity, water, gas, telecommunications, and other utility-style statements where practical.
+```
+
+## Targeted Prompt 8 — Review Queue
+
+```text
+Extend the Review Queue for extraction and reconciliation exceptions.
 
 Support:
+- source identification uncertainty
+- ambiguous field mapping
 - ambiguous transaction
 - possible duplicate
-- reconciliation conflict
-- unknown account
-- unknown period
-- parse warning
 - balance mismatch
+- overlapping statement period
+- loan balance conflict
+- utility bill ambiguity
 
-Every item must explain:
+Each item must explain:
 What we found
 Why we are unsure
-What choices are available
-What happens after the choice
+What we need from you
+What happens next
 
-User decisions must be auditable.
-Do not silently mutate canonical transactions.
+Keep the default experience non-technical.
+
+User resolutions must be auditable and must not overwrite immutable source evidence.
 ```
 
-## Targeted Prompt 7 — Posting
+## Targeted Prompt 9 — Posting and financial state
 
 ```text
-Integrate successful statement processing with canonical transactions and FinancialSnapshot.
+Integrate high-confidence imported financial observations with the canonical financial model.
 
-High-confidence records may auto-post.
-Review-required records must remain unposted until resolved.
-Use transactional posting.
-Support partial completion without silent data loss.
-Ensure retries and reprocessing are idempotent.
-Add failure/retry tests.
+Rules:
+- transactions post through the existing transaction pipeline
+- loan observations update debt state through the existing debt model
+- utility observations update recurring obligations/cash-flow inputs
+- credit-card statement facts update the credit/debt model without confusing statement balance with revolving debt
+
+Use transactional posting and idempotency.
+
+After successful posting, recalculate FinancialSnapshot and relevant derived financial intelligence.
+
+Review-required records must not silently affect canonical state.
+Add failure and retry tests.
 ```
 
-## Targeted Prompt 8 — Statement experience polish
+## Targeted Prompt 10 — Import summary and statement detail UX
 
 ```text
-Complete the statement list/detail experience.
+Complete the import experience.
 
-Show:
-- statement
-- account
-- period
-- processing status
-- imported count
-- duplicate count
-- review count
-- source document
-- processing history
+After processing show a summary such as:
 
-After completion show a human-readable summary such as:
+Statement processed
+Bank account: Checking
+Period: August 1–31
+128 financial records found
 126 imported
 2 need your help
-Nothing was duplicated.
+
+For a utility bill:
+
+Utility bill processed
+Service period: August
+Bill: $182.40
+Due: September 15
+Recurring obligation detected: Yes
+
+For a loan statement:
+
+Loan statement processed
+Balance: $24,300
+Payment: $620
+Interest rate: 6.4%
+
+Use the actual extracted data; examples above are presentation patterns only.
+```
+
+## Targeted Prompt 11 — Integration
+
+```text
+Integrate the complete CSV/PDF ingestion path:
+
+Upload → identify → extract → normalize → reconcile → review/auto-post → recalculate financial state.
+
+Test each source category:
+- bank
+- credit card
+- loan
+- utility
+
+Test:
+- duplicate import
+- overlapping statements
+- parser failure
+- low-confidence extraction
+- balance mismatch
+- partial review
+- reprocessing
+- household authorization
+
+Do not add online institution integrations.
 ```
 
 ## Slice 2 Review Prompt
 
 ```text
 Review Slice 2 for:
-- idempotency
+- extraction accuracy
+- source-category correctness
 - transaction integrity
-- source provenance
+- loan balance integrity
+- utility obligation integrity
 - duplicate protection
-- document security
-- household authorization
-- Review Queue correctness
+- immutable provenance
+- parser security
 - async reliability
+- Review Queue correctness
 - non-technical spouse UX
-- parser regression coverage
+- regression fixture coverage
 
 Do not add functionality.
 Return ranked findings and required fixes.
@@ -835,7 +1090,7 @@ Do not implement:
 - AI recommendations
 - credit-card optimization
 - advanced FI modeling
-- bank APIs
+- online institution APIs
 
 The AI must eventually consume these services, so keep all calculations structured, deterministic, versioned, and auditable.
 ```
@@ -1118,7 +1373,7 @@ Implement graceful LLM failure.
 Implement response grounding.
 
 Do not implement research/validated recommendations yet.
-Do not implement bank integrations.
+Do not implement online institution integrations.
 Do not implement automated money movement.
 Do not create a generic autonomous-agent framework.
 ```
@@ -1706,171 +1961,201 @@ Return ranked findings.
 
 ---
 
-# 14. Slice 6 — Bank Integrations & Continuous Synchronization
+# 14. Slice 6 — Advanced Import Intelligence
 
 ## Objective
 
-Move from manual statement ingestion to automatic household financial updates while preserving the same canonical data pipeline.
+Improve the CSV/PDF financial-data ingestion experience without introducing online institution connectivity. The goal is to make manual import increasingly automatic, accurate, explainable, and resilient across banks, credit cards, loans, and utilities.
 
 ## Initial Slice Prompt
 
 ```text
-Implement Slice 6 — Bank Integrations and Continuous Synchronization.
+Implement Slice 6 — Advanced Import Intelligence.
 
-Introduce a provider-neutral FinancialProvider abstraction.
+Do not implement online institution integrations. Their timing is TBD.
 
-The canonical pipeline must remain:
+Improve the existing CSV/PDF import pipeline for:
+- banks
+- credit cards
+- loans
+- utilities
 
-Provider → raw observation → normalize → reconcile → validate → canonical transaction → FinancialSnapshot.
+Focus on:
+- source/template learning
+- improved institution/source identification
+- parser confidence
+- reusable CSV mappings
+- PDF extraction accuracy
+- better reconciliation
+- recurring obligation detection
+- statement-to-statement comparison
+- balance continuity
+- user-approved learned corrections
+- explainable import results
 
-Use tokenized/OAuth provider connections where supported.
-Never store bank passwords in this application.
+Preserve the canonical flow:
+CSV/PDF → raw source → extract → normalize → reconcile → validate → canonical financial state → FinancialSnapshot.
 
-Implement:
-- provider connection lifecycle
-- accounts
-- transaction sync
-- balance sync
-- sync cursor/state
-- idempotency
-- retries
-- provider health
-- reconnect flow
-- sync history
-- user-visible sync status
-
-Use the existing statement ingestion pipeline as a fallback for unsupported institutions.
-
-Do not change canonical financial models simply to accommodate one provider.
+The system should become easier to use over time without requiring online bank connections.
 ```
 
-## Targeted Prompt 1 — Provider abstraction
+## Targeted Prompt 1 — Source/template profiles
 
 ```text
-Create:
-FinancialProvider
-ProviderConnection
-ProviderAccount
-ProviderTransaction
-ProviderBalance
+Create versioned source/template profiles for recurring CSV/PDF layouts.
 
-The application should not depend on one provider's data model.
+A profile may contain:
+- source category
+- institution/provider name
+- detected columns
+- date format
+- amount format
+- common labels
+- document-layout hints
+- parser strategy
+- confidence rules
+
+Profiles must be reusable but never trusted blindly.
+Validate every import against the actual document.
 ```
 
-## Targeted Prompt 2 — Mock provider
+## Targeted Prompt 2 — User-approved learning
 
 ```text
-Implement a deterministic MockFinancialProvider.
+Implement learning from user-approved Review Queue corrections.
 
-Support:
-- accounts
-- transactions
-- balances
-- pagination
-- incremental updates
-- transient failures
-- authentication failure
+Examples:
+- field mapping correction
+- transaction category correction
+- merchant normalization
+- document source type
+- recurring obligation classification
 
-This provider becomes the primary automated-test fixture.
+Corrections must be:
+- household-scoped where appropriate
+- versioned
+- reversible
+- explicitly approved for learning
+
+Never silently train on a correction.
 ```
 
-## Targeted Prompt 3 — Connection UX
+## Targeted Prompt 3 — Statement comparison
 
 ```text
-Implement account connection UX.
+Implement statement-to-statement comparison.
 
-User experience:
-Connect account → provider authorization → account selection → confirmation → initial sync.
+For sequential statements identify:
+- opening/closing balance continuity
+- missing periods
+- duplicated periods
+- large balance changes
+- new recurring charges
+- removed recurring charges
+- changed loan payments
+- changed utility charges
 
-Use plain language.
-Never ask the user to provide bank credentials directly to the application.
+Surface discrepancies through Review Queue or Financial Attention items.
+Do not invent explanations.
 ```
 
-## Targeted Prompt 4 — Sync worker
+## Targeted Prompt 4 — Advanced recurring financial facts
 
 ```text
-Implement scheduled/incremental synchronization.
+Improve recurring detection across:
+- bank deposits
+- bills
+- utility charges
+- loan payments
+- credit-card payments
+- subscriptions/recurring household expenses
 
-Support:
-- cursor/checkpoint
-- retry with backoff
-- idempotency
-- pagination
-- rate limits
-- provider errors
-- partial failures
-
-Do not block unrelated accounts when one account fails.
+Require multiple observations before marking a recurring pattern with high confidence.
+Keep recurring observations separate from user-approved budget obligations.
 ```
 
-## Targeted Prompt 5 — Reconciliation integration
+## Targeted Prompt 5 — Import quality scoring
 
 ```text
-Integrate provider transactions into existing reconciliation.
+Create an import-quality score that summarizes:
+- extraction completeness
+- field confidence
+- reconciliation confidence
+- balance consistency
+- duplicate risk
+- unresolved exceptions
 
-Do not create a separate reconciliation model.
-Existing statement and provider data should converge on the same canonical transaction system.
-```
-
-## Targeted Prompt 6 — Connection error UX
-
-```text
-Implement user-facing connection recovery.
+Show a plain-language result to the user, not a technical parser score.
 
 Example:
-"Your bank connection needs attention. Sign in again to resume updates."
-
-Primary action:
-Reconnect Account
-
-Fallback:
-Upload Statement
-
-Never expose OAuth/provider error codes by default.
+\"Import quality: Excellent — all records were reconciled and no issues were found.\"
 ```
 
-## Targeted Prompt 7 — Sync observability
+## Targeted Prompt 6 — Import UX refinement
 
 ```text
-Implement:
-- sync history
-- last successful sync
-- sync duration
-- account freshness
-- retry state
-- provider health
+Refine the import UX using actual household testing.
 
-Do not log credentials or restricted financial payloads.
+Optimize for:
+- fewer steps
+- fewer questions
+- understandable progress
+- easy correction
+- obvious completion state
+- easy reprocessing
+
+The user should not need to understand the difference between a bank, credit-card, loan, or utility parser.
 ```
 
-## Targeted Prompt 8 — E2E
+## Targeted Prompt 7 — Regression corpus
 
 ```text
-Test:
-connect → initial sync → reconcile → FinancialSnapshot → dashboard.
+Build a regression corpus of anonymized CSV/PDF examples across:
+- checking
+- savings
+- credit card
+- auto/personal/mortgage-style loans
+- electric
+- gas
+- water
+- telecommunications
 
-Also test:
-- provider timeout
-- provider re-authentication
-- duplicate sync
-- partial account failure
-- statement fallback.
+Track parser regressions and extraction accuracy over time.
+```
+
+## Targeted Prompt 8 — Slice 6 integration
+
+```text
+Integrate advanced import intelligence into the existing ingestion pipeline.
+
+Verify that improvements never bypass:
+- immutable source storage
+- provenance
+- reconciliation
+- Review Queue
+- household authorization
+- FinancialSnapshot versioning
+
+Do not add online institution connectivity.
 ```
 
 ## Slice 6 Review Prompt
 
 ```text
 Review Slice 6 for:
-- credential security
-- provider coupling
-- sync idempotency
-- duplicate transactions
-- connection recovery
-- provider outage behavior
-- data freshness
+- extraction accuracy
+- false confidence
+- learned-correction safety
+- provenance
+- reconciliation
+- statement continuity
+- utility obligation accuracy
+- loan balance accuracy
+- privacy
 - UX simplicity
 
-Do not add functionality.
+Confirm that the application remains fully useful with CSV/PDF imports alone.
+Do not add online institution integrations.
 ```
 
 ---
@@ -2083,7 +2368,7 @@ Harden:
 The system must remain useful when:
 - public LLM is unavailable;
 - research provider is unavailable;
-- bank provider is unavailable;
+- online institution provider is unavailable;
 - statement parsing fails.
 ```
 
@@ -2254,7 +2539,7 @@ Track:
 - AI failures
 - research freshness
 - recommendation validation
-- provider sync health
+- import pipeline health
 
 Never log restricted financial payloads.
 ```
@@ -2290,7 +2575,7 @@ Test:
 - worker crash
 - API crash
 - LLM provider outage
-- bank provider outage
+- online institution provider outage
 
 Document recovery behavior.
 ```
@@ -3013,12 +3298,35 @@ Drop PDF
 
 ---
 
+# 27. Online Institution Integrations — Future / TBD
+
+Direct connections to banks, credit-card issuers, loan providers, utilities, investment institutions, or aggregators are intentionally **postponed**. The delivery date is **TBD**.
+
+When this work is eventually scheduled, it should reuse the existing provider-neutral ingestion contract and feed the same canonical processing path used by CSV/PDF imports. It must not create a second financial-data model.
+
+Future integration work is expected to include, at minimum:
+
+- provider/aggregator abstraction
+- connection lifecycle
+- credential/token handling
+- incremental transaction retrieval
+- balance retrieval
+- duplicate/reconciliation integration
+- connection health
+- reconnect UX
+- auditability
+- provider outage handling
+
+Until this capability is formally scheduled, the product should treat **CSV/PDF import as the authoritative ingestion mechanism**.
+
+---
+
 # 27. Definition of Done for the Entire Product
 
 The system is directionally complete when:
 
 1. Both spouses can use the application without technical assistance.
-2. The household financial state is continuously current.
+2. The household financial state is current based on the latest available imported data.
 3. Statements can be uploaded with minimal user effort.
 4. Normal ingestion is automatic.
 5. Ambiguity goes to a clear Review Queue.
@@ -3030,13 +3338,13 @@ The system is directionally complete when:
 11. Recommendations are evidence-backed and independently challenged.
 12. Current facts are sourced and timestamped.
 13. Public LLM access is minimized and privacy-controlled.
-14. The application remains useful when external AI is unavailable.
+14. The application remains useful when external AI, research, or document-processing services are unavailable.
 15. Persona selection changes framing but never financial truth.
 16. Financial decisions are auditable.
 17. Budget and financial-state changes require explicit approval.
 18. Backups can be restored and tested.
 19. Financial calculations have deterministic regression scenarios.
-20. The application can be reproduced entirely from Docker-based deployment artifacts.
+20. The application can be reproduced entirely from Docker-based deployment artifacts and remains fully useful without online institution integrations.
 
 ---
 
@@ -3072,7 +3380,7 @@ It is:
 
 The next milestone is:
 
-> "A spouse can drop in a statement and the system handles almost everything automatically."
+> "A spouse can drop in a bank, credit-card, loan, or utility CSV/PDF and the system handles almost everything automatically."
 
 Then:
 
