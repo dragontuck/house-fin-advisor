@@ -1,0 +1,165 @@
+/**
+ * Phase 3 Statements Styling
+ */
+
+.phase-3-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.guidance-box {
+    background-color: #f0f8ff;
+    border: 1px solid #b3e5fc;
+    border-radius: 8px;
+    padding: 1rem;
+    color: #01579b;
+}
+
+.guidance-box h4 {
+    margin: 0 0 0.75rem 0;
+    color: #01579b;
+    font-size: 1rem;
+}
+
+.guidance-box p {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.9rem;
+}
+
+.guidance-box ul {
+    margin: 0.75rem 0 0 0;
+    padding-left: 1.5rem;
+}
+
+.guidance-box li {
+    margin: 0.25rem 0;
+    font-size: 0.9rem;
+}
+
+/* Date Range Inputs */
+.date-inputs {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.date-inputs input {
+    flex: 1;
+    min-width: 0;
+}
+
+.date-inputs span {
+    color: #7f8c8d;
+    white-space: nowrap;
+}
+
+/* File Upload Area */
+.file-upload-area {
+    border: 2px dashed #bdc3c7;
+    border-radius: 8px;
+    padding: 3rem 1rem;
+    text-align: center;
+    background-color: #f8f9fa;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.file-upload-area.active {
+    border-color: #3498db;
+    background-color: #ecf0f1;
+}
+
+.file-upload-area:hover {
+    border-color: #3498db;
+}
+
+.upload-content p {
+    margin: 0.5rem 0;
+    color: #2c3e50;
+    font-weight: 500;
+}
+
+.upload-content .small {
+    font-size: 0.85rem;
+    color: #7f8c8d;
+}
+
+.file-input-label {
+    display: inline-block;
+    cursor: pointer;
+}
+
+.file-input-label .btn-secondary {
+    margin-top: 0.5rem;
+}
+
+/* Uploaded Files */
+.uploaded-files {
+    background-color: #f0fdf4;
+    border: 1px solid #86efac;
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.uploaded-files h3 {
+    margin: 0 0 1rem 0;
+    font-size: 1rem;
+    color: #166534;
+}
+
+.file-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    background-color: white;
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    border-left: 4px solid #22c55e;
+}
+
+.file-item:last-child {
+    margin-bottom: 0;
+}
+
+.file-item span {
+    flex: 1;
+    word-break: break-word;
+    font-size: 0.9rem;
+}
+
+.btn-remove {
+    flex-shrink: 0;
+    margin-left: 1rem;
+}
+
+@media (max-width: 640px) {
+    .file-upload-area {
+        padding: 2rem 0.75rem;
+    }
+
+    .date-inputs {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .date-inputs input {
+        width: 100%;
+    }
+
+    .date-inputs span {
+        text-align: center;
+    }
+
+    .file-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .btn-remove {
+        margin-left: 0;
+        margin-top: 0.75rem;
+        width: 100%;
+    }
+}

@@ -1,0 +1,128 @@
+/**
+ * Phase 2 Accounts Styling
+ */
+
+.phase-2-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.account-category {
+    margin-bottom: 1.5rem;
+    border: 1px solid #ecf0f1;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.category-header {
+    background-color: #f8f9fa;
+    padding: 1rem;
+    font-weight: 600;
+    color: #2c3e50;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+}
+
+.category-header:hover {
+    background-color: #ecf0f1;
+}
+
+.category-toggle {
+    font-size: 1.2rem;
+    transition: transform 0.2s;
+}
+
+.category-toggle.open {
+    transform: rotate(180deg);
+}
+
+.category-accounts {
+    padding: 0;
+}
+
+.account-item {
+    padding: 1rem;
+    border-top: 1px solid #ecf0f1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.account-info {
+    flex: 1;
+}
+
+.account-name {
+    font-weight: 500;
+    color: #2c3e50;
+}
+
+.account-type {
+    font-size: 0.85rem;
+    color: #7f8c8d;
+    margin-top: 0.25rem;
+}
+
+.account-balance {
+    text-align: right;
+    font-weight: 600;
+    color: #27ae60;
+}
+
+/* Add Account Modal/Form */
+.add-account-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.add-account-form {
+    background: white;
+    padding: 2rem;
+    border-radius: 12px;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.add-account-form h3 {
+    margin-top: 0;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 1.5rem;
+}
+
+.modal-actions button {
+    flex: 1;
+}
+
+@media (max-width: 640px) {
+    .account-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .account-balance {
+        text-align: left;
+        margin-top: 0.5rem;
+    }
+
+    .add-account-form {
+        width: 95%;
+    }
+}

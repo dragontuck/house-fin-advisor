@@ -1,0 +1,71 @@
+/**
+ * Phase 1 Setup Styling
+ */
+
+.phase-1-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.institution-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    min-height: 32px;
+}
+
+.institution-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background-color: #e3f2fd;
+    color: #1976d2;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.institution-tag .remove-btn {
+    background: none;
+    border: none;
+    color: #1976d2;
+    cursor: pointer;
+    font-size: 1.25rem;
+    padding: 0;
+    line-height: 1;
+    transition: opacity 0.2s;
+}
+
+.institution-tag .remove-btn:hover {
+    opacity: 0.7;
+}
+
+.institution-input {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.institution-input input {
+    flex: 1;
+}
+
+.institution-input button {
+    min-width: 120px;
+}
+
+@media (max-width: 640px) {
+    .institution-input {
+        flex-direction: column;
+    }
+
+    .institution-input input {
+        width: 100%;
+    }
+
+    .institution-input button {
+        width: 100%;
+    }
+}

@@ -1,0 +1,59 @@
+/**
+ * Action Bar Styling
+ */
+
+.action-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #ecf0f1;
+}
+
+.action-bar-left,
+.action-bar-center,
+.action-bar-right {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.action-bar-left {
+    flex: 1;
+    justify-content: flex-start;
+}
+
+.action-bar-center {
+    flex: 1;
+    justify-content: center;
+}
+
+.action-bar-right {
+    flex: 1;
+    justify-content: flex-end;
+}
+
+.action-bar button {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+    .action-bar {
+        flex-direction: column;
+        padding: 1rem 0;
+    }
+
+    .action-bar-left,
+    .action-bar-center,
+    .action-bar-right {
+        width: 100%;
+        justify-content: stretch;
+    }
+
+    .action-bar button {
+        width: 100%;
+    }
+}

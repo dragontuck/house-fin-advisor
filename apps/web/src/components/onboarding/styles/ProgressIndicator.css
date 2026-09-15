@@ -1,0 +1,68 @@
+/**
+ * Progress Indicator Styling
+ */
+
+.progress-indicator {
+    margin-bottom: 2rem;
+}
+
+.step-counter {
+    font-size: 0.9rem;
+    color: #7f8c8d;
+    margin-bottom: 0.75rem;
+    font-weight: 500;
+}
+
+.progress-bar {
+    height: 6px;
+    background-color: #ecf0f1;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3498db, #2980b9);
+    transition: width 0.3s ease;
+    border-radius: 3px;
+}
+
+.phase-steps {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.phase-step {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background-color: #ecf0f1;
+    color: #7f8c8d;
+    transition: all 0.2s;
+}
+
+.phase-step.complete {
+    background-color: #27ae60;
+    color: white;
+}
+
+.phase-step.active {
+    background-color: #3498db;
+    color: white;
+    box-shadow: 0 0 0 4px rgba(52, 152, 219, 0.2);
+}
+
+@media (max-width: 640px) {
+    .phase-step {
+        width: 28px;
+        height: 28px;
+        font-size: 0.7rem;
+    }
+}

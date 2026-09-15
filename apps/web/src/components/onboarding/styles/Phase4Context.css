@@ -1,0 +1,155 @@
+/**
+ * Phase 4 Financial Context Styling
+ */
+
+.phase-4-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.section {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+}
+
+.section h3 {
+    margin-top: 0;
+    color: #2c3e50;
+    font-size: 1.1rem;
+}
+
+.section-description {
+    color: #7f8c8d;
+    font-size: 0.9rem;
+    margin: 0 0 1rem 0;
+}
+
+.detection-box {
+    background-color: white;
+    border: 1px solid #ecf0f1;
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.detection-box p {
+    margin: 0.5rem 0;
+    color: #2c3e50;
+}
+
+.confidence {
+    font-size: 0.9rem;
+    color: #7f8c8d;
+}
+
+.badge-HIGH {
+    background-color: #d4edda;
+    color: #155724;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.badge-MEDIUM {
+    background-color: #fff3cd;
+    color: #856404;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.badge-LOW {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.expenses-list {
+    background-color: white;
+    border: 1px solid #ecf0f1;
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.expense-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #ecf0f1;
+}
+
+.expense-item:last-of-type {
+    border-bottom: none;
+}
+
+.expense-info {
+    flex: 1;
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.expense-info strong {
+    color: #2c3e50;
+}
+
+.expense-amount {
+    font-weight: 600;
+    color: #e74c3c;
+    white-space: nowrap;
+}
+
+.total {
+    display: flex;
+    justify-content: space-between;
+    padding-top: 0.75rem;
+    border-top: 2px solid #ecf0f1;
+    margin-top: 0.75rem;
+    font-size: 1.1rem;
+    color: #2c3e50;
+}
+
+.total span {
+    font-weight: 600;
+    color: #27ae60;
+}
+
+.no-data {
+    color: #7f8c8d;
+    font-style: italic;
+    margin: 0;
+}
+
+.loading {
+    padding: 1rem;
+    text-align: center;
+    color: #7f8c8d;
+    font-size: 0.95rem;
+}
+
+@media (max-width: 640px) {
+
+    .detection-box,
+    .expenses-list {
+        margin-bottom: 1rem;
+    }
+
+    .expense-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .expense-amount {
+        margin-top: 0.5rem;
+    }
+}
