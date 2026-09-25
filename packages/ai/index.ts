@@ -184,3 +184,10 @@ export {
     classifyStaleSnapshot,
     type AdvisorFailure,
 } from "./graceful-failure";
+
+export {
+    initializeDatabaseAwareLLMFactory,
+    getProviderForHousehold,
+    getSettingsRepository,
+    isDatabaseAwareLLMInitialized,
+} from "./database-aware-llm-factory";

@@ -73,6 +73,7 @@ import {
     CachedEvidenceResearchProvider,
     AnthropicResearchProvider,
     defaultControlledResearchConfig,
+    initializeDatabaseAwareLLMFactory,
     type ToolDependencies,
 } from "@house-fin/ai";
 import {
@@ -103,6 +104,7 @@ import {
     PgRecommendationRepository,
     PgRecommendationVersionRepository,
 } from "./db/repositories";
+import pool from "./db/connection";
 import { householdContextMiddleware, verifyHouseholdContext } from "./middleware/household-context";
 import { uploadRateLimiter } from "./middleware/rate-limit";
 import { keycloakAuthMiddleware, keycloakOptionalAuth } from "./auth/keycloak-middleware";
@@ -118,6 +120,7 @@ import { registerToolExecutionRoutes } from "./routes/tool-execution";
 import { registerAIAuditRoutes } from "./routes/ai-audit";
 import { registerDecisionJournalRoutes } from "./routes/decision-journal";
 import { registerRecommendationRoutes } from "./routes/recommendations";
+import { registerAdminSettingsRoutes } from "./routes/admin-settings";
 
 /**
  * Error with context
@@ -389,6 +392,17 @@ export function createServer(): Express {
     // Initialize privacy gateway
     const privacyGateway = new PrivacyGateway();
     setPrivacyGateway(privacyGateway);
+
+    // Initialize database-aware LLM factory for household-specific provider settings
+    try {
+        initializeDatabaseAwareLLMFactory(pool);
+        console.log("[LLM] Database-aware LLM factory initialized");
+    } catch (error) {
+        console.warn(
+            "[LLM] Failed to initialize database-aware factory, will fall back to environment defaults:",
+            error
+        );
+    }
 
     // Initialize LLM provider - only if API key is configured
     let llmProvider: any = null;
@@ -2857,6 +2871,10 @@ export function createServer(): Express {
     // Create route context for budget approval routes
     const approvalRouteContext = {
         app,
+        pool,
+        middleware: {
+            keycloakOptionalAuth,
+        },
         householdService,
         reviewQueueService,
         postingService,
@@ -2895,6 +2913,7 @@ export function createServer(): Express {
     registerRecommendationRoutes(approvalRouteContext);
     registerToolExecutionRoutes(approvalRouteContext);
     registerAIAuditRoutes(approvalRouteContext);
+    registerAdminSettingsRoutes(approvalRouteContext);
 
     /**
      * 404 handler

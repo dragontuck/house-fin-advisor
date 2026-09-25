@@ -40,3 +40,10 @@ export async function getClient(): Promise<PoolClient> {
 export async function closePool(): Promise<void> {
     await pool.end();
 }
+
+/**
+ * Get the connection pool directly (for initialization of other services)
+ */
+export function getPool(): Pool {
+    return pool;
+}

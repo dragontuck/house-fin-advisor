@@ -604,6 +604,10 @@ export {
     ExpenseDetectionService,
 } from "./services/expense-detection.service";
 
+export {
+    AdminSettingsService,
+} from "./services/admin-settings-service";
+
 // Onboarding types
 export type {
     OnboardingProgress,

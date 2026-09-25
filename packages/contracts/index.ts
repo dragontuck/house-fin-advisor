@@ -1920,3 +1920,6 @@ export * from "./decision-journal";
 
 // ── Slice 5: Advisor Persona Contracts ─────────────────────────────────────────
 export * from "./advisor-persona";
+
+// ── Admin Settings Contracts ───────────────────────────────────────────────────
+export * from "./admin-settings";

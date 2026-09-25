@@ -19,10 +19,11 @@ import { registerAdvisorConversationRoutes } from "./advisor-conversations";
 import { registerToolExecutionRoutes } from "./tool-execution";
 import { registerOrchestratorRoutes } from "./ai-orchestrator";
 import { registerDecisionJournalRoutes } from "./decision-journal";
+import { registerAdminSettingsRoutes } from "./admin-settings";
 
 /**
  * All route registrars to be called in order
- * Order: Core → Documents → Posting → Financial Analysis → Budget Approval → Health Intelligence → Advisor Conversations → AI Orchestration → Tools
+ * Order: Core → Documents → Posting → Financial Analysis → Budget Approval → Health Intelligence → Advisor Conversations → AI Orchestration → Tools → Admin Settings
  */
 const routeRegistrars: RouteRegistrar[] = [
     registerCoreRoutes,                    // Household, accounts, pulse
@@ -39,6 +40,7 @@ const routeRegistrars: RouteRegistrar[] = [
     registerOrchestratorRoutes,            // AI orchestrator with tool planning and execution
     registerDecisionJournalRoutes,         // Immutable recommendation history and user decisions
     registerToolExecutionRoutes,           // AI tool execution endpoints
+    registerAdminSettingsRoutes,           // Admin settings for AI provider configuration
 ];
 
 /**
@@ -69,4 +71,5 @@ export {
     registerOrchestratorRoutes,
     registerDecisionJournalRoutes,
     registerToolExecutionRoutes,
+    registerAdminSettingsRoutes,
 };

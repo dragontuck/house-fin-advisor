@@ -3,6 +3,7 @@
  */
 
 import { Express } from "express";
+import { Pool } from "pg";
 import {
     HouseholdService,
     ReviewQueueService,
@@ -43,6 +44,10 @@ import { ObjectStorageAdapter } from "../storage/object-storage";
  */
 export interface RouteContext {
     app: Express;
+    pool: Pool;
+    middleware: {
+        keycloakOptionalAuth: any;
+    };
     // Services
     householdService: HouseholdService;
     reviewQueueService: ReviewQueueService;
