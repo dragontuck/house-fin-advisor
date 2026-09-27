@@ -6,6 +6,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../../auth/useAuth";
+import { authenticatedFetch } from "../../auth/api-auth"; // Ensure authenticatedFetch is imported from your API utility module
 import {
     AIProviderSettingsResponse,
     UpdateAIProviderSettingsRequest,
@@ -19,7 +20,7 @@ interface AdminSettingsPageProps {
 }
 
 export const AdminSettingsPage: React.FC<AdminSettingsPageProps> = ({ householdId }) => {
-    const { authenticatedFetch, keycloakToken } = useAuth();
+    const { user, getAccessToken } = useAuth();
     const [settings, setSettings] = useState<AIProviderSettingsResponse | null>(null);
     const [selectedProvider, setSelectedProvider] = useState<LLMProviderName>("anthropic");
     const [selectedModel, setSelectedModel] = useState<string>("");
@@ -31,8 +32,9 @@ export const AdminSettingsPage: React.FC<AdminSettingsPageProps> = ({ householdI
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
     // Check if user has admin role
-    const userRoles = keycloakToken?.realm_access?.roles || [];
-    const isAdmin = userRoles.some((role) => role === "admin" || role === "ADMIN");
+    // FIX: Read roles directly from user object
+    const userRoles = user?.roles || [];
+    const isAdmin = userRoles.some((role: string) => role === "admin" || role === "ADMIN");
 
     useEffect(() => {
         loadSettings();
@@ -44,7 +46,9 @@ export const AdminSettingsPage: React.FC<AdminSettingsPageProps> = ({ householdI
             setError(null);
 
             const response = await authenticatedFetch(
-                `/admin/settings/ai-provider`
+                `/admin/settings/ai-provider`,
+                undefined,
+                getAccessToken
             );
 
             if (!response.ok) {
@@ -114,7 +118,8 @@ export const AdminSettingsPage: React.FC<AdminSettingsPageProps> = ({ householdI
                         "Content-Type": "application/json",
                     },
                     body: JSON.stringify(updateRequest),
-                }
+                },
+                getAccessToken
             );
 
             if (!response.ok) {

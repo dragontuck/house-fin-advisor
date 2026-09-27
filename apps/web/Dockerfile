@@ -18,4 +18,4 @@ RUN npm ci
 EXPOSE 6173
 
 # Start the Vite dev server with HMR enabled
-CMD ["npm", "run", "dev", "--workspace=apps/web"]
+CMD ["npm", "run", "dev", "--workspace=apps/web", "--", "--host", "0.0.0.0", "--port", "6173"]

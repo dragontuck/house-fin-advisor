@@ -19,7 +19,7 @@ import {
     AIProviderSettings,
     EntityId,
 } from "@house-fin/contracts";
-import { PostgresAIProviderSettingsRepository } from "@house-fin/db";
+import { PostgresAIProviderSettingsRepository } from "@house-fin/db/repositories/admin-settings-repository";
 
 /**
  * Holder for database pool reference

@@ -4,6 +4,8 @@
  */
 
 import express, { Express, Request, Response, NextFunction } from "express";
+import https from 'https';
+import http from 'http';
 import cors from "cors";
 import { v4 as uuidv4 } from "uuid";
 import {
@@ -121,7 +123,8 @@ import { registerAIAuditRoutes } from "./routes/ai-audit";
 import { registerDecisionJournalRoutes } from "./routes/decision-journal";
 import { registerRecommendationRoutes } from "./routes/recommendations";
 import { registerAdminSettingsRoutes } from "./routes/admin-settings";
-
+import path from "path";
+import fs from 'fs';
 /**
  * Error with context
  */
@@ -3024,12 +3027,38 @@ export async function startServer(port: number = 6723): Promise<void> {
     const documentQueue = getDocumentProcessingQueue();
     registerDocumentProcessingWorker(documentQueue, documentRepo);
 
+    // Define paths to your SSL certificate and private key
+    const certPath = path.resolve(__dirname, '../certs/house-finance.crt');
+    const keyPath = path.resolve(__dirname, '../certs/house-finance.key');
+
     await new Promise<void>((resolve) => {
-        app.listen(port, () => {
-            console.log(`✓ API server listening on port ${port}`);
-            console.log(`✓ Document processing queue initialized`);
-            resolve();
-        });
+        // Check if certificates exist, run HTTPS; otherwise fallback to HTTP
+        if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+            const sslOptions = {
+                key: fs.readFileSync(keyPath),
+                cert: fs.readFileSync(certPath),
+            };
+
+            https.createServer(sslOptions, app).listen(port, () => {
+                console.log(`🔒 HTTPS Server running on https://api.house-finance.local:${port}`);
+                console.log(`✓ Document processing queue initialized`);
+                resolve();
+            });
+        } else {
+            http.createServer(app).listen(port, () => {
+                console.log(`✓ Document processing queue initialized`);
+                console.warn(`⚠️ Certificates not found at ${certPath}. Falling back to HTTP.`);
+                console.log(`🔓 HTTP Server running on http://localhost:${port}`);
+                resolve();
+            });
+        }
+
+
+        //     app.listen(port, () => {
+        //         console.log(`✓ API server listening on port ${port}`);
+        //         console.log(`✓ Document processing queue initialized`);
+        //         resolve();
+        //     });
     });
 
     // Handle graceful shutdown

@@ -5,7 +5,6 @@
 
 import { useContext } from 'react';
 import { AuthContext, AuthContextType } from './AuthContext';
-
 /**
  * Custom hook to use authentication context
  * @returns Authentication context
@@ -50,3 +49,4 @@ export function useRequireAuth(): AuthContextType {
 
     return auth;
 }
+

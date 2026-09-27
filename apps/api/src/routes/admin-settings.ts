@@ -45,7 +45,7 @@ async function getAIProviderSettings(
 ): Promise<void> {
     try {
         const { adminSettingsService } = req.app.locals as AdminSettingsRouteContext;
-        const householdId = req.householdId;
+        const householdId = (req as any).householdId;
 
         if (!householdId) {
             throw new AdminSettingsError(400, "MISSING_HOUSEHOLD_ID", "Household ID is required");
@@ -86,9 +86,9 @@ async function updateAIProviderSettings(
 ): Promise<void> {
     try {
         const { adminSettingsService } = req.app.locals as AdminSettingsRouteContext;
-        const householdId = req.householdId;
-        const keycloakToken = req.keycloakToken;
-        const memberId = req.memberId;
+        const householdId = (req as any).householdId;
+        const keycloakToken = (req as any).keycloakToken;
+        const memberId = (req as any).memberId;
 
         if (!householdId) {
             throw new AdminSettingsError(400, "MISSING_HOUSEHOLD_ID", "Household ID is required");

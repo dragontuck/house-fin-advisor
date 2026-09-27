@@ -29,6 +29,7 @@ import AdvisorSection from "./components/Advisor/AdvisorSection";
 import AdvisorErrorBoundary from "./components/Advisor/AdvisorErrorBoundary";
 import { UserMenu } from "./components/Auth/UserMenu";
 import { AuthLoading } from "./components/Auth/AuthLoading";
+
 import "./App.css";
 
 function App() {
@@ -44,33 +45,7 @@ function App() {
     const [error, setError] = useState<string | null>(null);
     const [showUpload, setShowUpload] = useState(false);
 
-    // Wait for authentication to initialize
-    useEffect(() => {
-        if (!isAuthLoading) {
-            loadAll();
-        }
-    }, [isAuthLoading]);
-
-    // Show loading screen while authentication is initializing
-    if (isAuthLoading) {
-        return <AuthLoading />;
-    }
-
-    // Redirect to login if not authenticated
-    if (!isAuthenticated) {
-        return (
-            <div className="error">
-                <div className="error-box">
-                    <div className="error-title">Authentication Required</div>
-                    <div className="error-message">
-                        Please log in to access the financial advisor.
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    const loadAll = async () => {
+    async function loadAll() {
         try {
             setLoading(true);
             setError(null);
@@ -108,6 +83,35 @@ function App() {
             setLoading(false);
         }
     };
+
+
+    // Wait for authentication to initialize
+    useEffect(() => {
+        if (!isAuthLoading && isAuthenticated) {
+            loadAll();
+        }
+    }, [isAuthLoading, isAuthenticated]);
+
+    // Show loading screen while authentication is initializing
+    if (isAuthLoading) {
+        return <AuthLoading />;
+    }
+
+    // Redirect to login if not authenticated
+    if (!isAuthenticated) {
+        return (
+            <div className="error">
+                <div className="error-box">
+                    <div className="error-title">Authentication Required</div>
+                    <div className="error-message">
+                        Please log in to access the financial advisor.
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+
 
     if (loading) {
         return <div className="loading">Loading your financial overview...</div>;

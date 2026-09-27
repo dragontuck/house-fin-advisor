@@ -1,0 +1,11 @@
+authorityKeyIdentifier = keyid,issuer
+basicConstraints       = CA:FALSE
+keyUsage               = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
+extendedKeyUsage       = serverAuth
+subjectAltName         = @alt_names
+
+[alt_names]
+DNS.1 = *.house-finance.local
+DNS.2 = house-finance.local
+DNS.3 = web.house-finance.local
+DNS.4 = api.house-finance.local

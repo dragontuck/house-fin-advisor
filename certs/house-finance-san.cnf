@@ -1,0 +1,22 @@
+[req]
+default_bits        = 2048
+prompt              = no
+default_md          = sha256
+req_extensions      = req_ext
+distinguished_name  = dn
+
+[dn]
+C  = US
+ST = Local
+L  = Local
+O  = house-finance
+CN = *.house-finance.local
+
+[req_ext]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = *.house-finance.local
+DNS.2 = house-finance.local
+DNS.3 = web.house-finance.local
+DNS.4 = api.house-finance.local

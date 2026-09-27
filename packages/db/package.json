@@ -1,0 +1,10 @@
+{
+    "name": "@house-fin/db",
+    "version": "0.1.0",
+    "description": "Database repositories and interfaces",
+    "main": "index.ts",
+    "types": "index.ts",
+    "dependencies": {
+        "@house-fin/domain": "^0.1.0"
+    }
+}

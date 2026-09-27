@@ -11,7 +11,7 @@ import {
     AI_SETTINGS_ADMIN_ROLES,
 } from "@house-fin/contracts";
 import { EntityId } from "@house-fin/contracts";
-import { AIProviderSettingsRepository } from "../repositories/admin-settings-repository";
+import { AIProviderSettingsRepository } from "../../db/repositories/admin-settings-repository";
 
 /**
  * Keycloak JWT token claims for role extraction

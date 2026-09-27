@@ -10,7 +10,8 @@
     },
     "dependencies": {
         "@house-fin/contracts": "*",
-        "@house-fin/domain": "*"
+        "@house-fin/domain": "*",
+        "@house-fin/db": "*"
     },
     "devDependencies": {
         "typescript": "^5.0.0"

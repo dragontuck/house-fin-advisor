@@ -47,14 +47,16 @@ services:
       - MINIO_BUCKET=statements
       - LOG_LEVEL=info
       # Keycloak Authentication
-      - KEYCLOAK_REALM_URL=https://keycloak.keystone.internal:7443/
+      - KEYCLOAK_REALM_URL=https://keycloak.keystone.internal:7443
       - KEYCLOAK_REALM=home-fin
       - KEYCLOAK_CLIENT_ID=home-fin-api
       - KEYCLOAK_CLIENT_SECRET=cKlVAAJK7irs6H54QFbWPXgcKN60nJbZsIiHYZr9xh3AOZ6q2VHF7oL0pyaacz9aUCDf2raKkSL8Yjqa0dynwD
-      - CORS_ORIGIN=http://localhost:6173
+      - CORS_ORIGIN=https://web.house-finance.local:6173
+      - NODE_TLS_REJECT_UNAUTHORIZED=0      
     volumes:
       - ./apps/api/src:/app/src
       - ./packages:/app/packages
+      - ./certs:/app/apps/api/certs:ro
     networks:
       - default
 
@@ -70,15 +72,17 @@ services:
       - NODE_ENV=development
       - VITE_API_BASE_URL=/api
       # Keycloak Authentication
-      - VITE_KEYCLOAK_URL=https://keycloak.keystone.internal:7443/
+      - VITE_KEYCLOAK_URL=https://keycloak.keystone.internal:7443
       - VITE_KEYCLOAK_REALM=home-fin
       - VITE_KEYCLOAK_CLIENT_ID=home-fin-web
-      - VITE_API_URL=http://localhost:6723
+      - VITE_API_PROXY_TARGET=https://api.house-finance.local:6723
+      - NODE_TLS_REJECT_UNAUTHORIZED=0      
     volumes:
       - ./apps/web/src:/app/src
       - ./apps/web/index.html:/app/index.html
       - ./apps/web/vite.config.ts:/app/apps/web/vite.config.ts
       - ./packages:/app/packages
+      - ./certs:/app/apps/web/certs:ro
     networks:
       - default
 
