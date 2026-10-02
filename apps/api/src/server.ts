@@ -830,7 +830,7 @@ export function createServer(): Express {
 
     // Health check
     app.get("/health", (req: Request, res: Response) => {
-        res.json({ status: "ok", timestamp: new Date().toISOString() });
+        res.status(200).send("hello world!");
     });
 
     // ==================== HOUSEHOLD ENDPOINTS ====================

@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import fs from 'fs';
 import path from 'path';
+import https from 'https';
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -22,7 +23,8 @@ export default defineConfig({
             '/api': {
                 target: process.env.VITE_API_PROXY_TARGET || 'http://house-fin-api:6723',
                 changeOrigin: true,
-                rewrite: (path) => path.replace(/^\/api/, '')
+                rewrite: (path) => path.replace(/^\/api/, ''),
+                agent: new https.Agent({ rejectUnauthorized: false })
             }
         }
     }
